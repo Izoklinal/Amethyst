@@ -1,0 +1,20 @@
+---
+description: Tauri application architecture and development rules
+globs:
+  - "src-tauri/**/*.rs"
+  - "src/**/*"
+alwaysApply: false
+---
+
+# Tauri Guidelines
+
+- Keep the frontend and backend responsibilities separated.
+- Use Rust for filesystem operations, indexing and core business logic.
+- Keep Tauri commands thin.
+- Put application logic into dedicated Rust modules.
+- Do not expose unnecessary backend functionality to the frontend.
+- Validate all data received through IPC.
+- Follow Tauri capabilities and permission model.
+- Avoid blocking the UI thread with expensive operations.
+- Handle filesystem errors explicitly.
+- Do not assume that files remain unchanged between operations.
