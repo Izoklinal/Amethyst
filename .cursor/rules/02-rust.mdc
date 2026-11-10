@@ -1,0 +1,233 @@
+---
+description: Rust coding standards, conventions and engineering practices for Amethyst Core and Tauri backend.
+globs: "**/*.rs"
+alwaysApply: true
+---
+
+# Amethyst — Rust Development Rules
+
+## 1. General Principles
+
+Write Rust code that is:
+
+- Safe.
+- Explicit.
+- Readable.
+- Maintainable.
+- Efficient.
+- Testable.
+
+Prefer clear and idiomatic Rust over clever or overly abstract solutions.
+
+Follow established Rust conventions and use the type system to prevent invalid states wherever practical.
+
+Do not use `unsafe` unless absolutely necessary. Every use of `unsafe` must have a clear justification and documented safety invariants.
+
+## 2. Project Structure
+
+Amethyst Core must be implemented as an independent Rust library crate.
+
+The Tauri application must depend on Amethyst Core rather than contain its business logic.
+
+Keep logical responsibilities separated into modules.
+
+Do not create separate Cargo crates for every module without a concrete architectural reason.
+
+Avoid excessively large files and modules. Split code when responsibilities become difficult to understand or maintain.
+
+## 3. Naming and Code Style
+
+Follow standard Rust naming conventions:
+
+- `snake_case` for functions, variables and modules.
+- `PascalCase` for types and traits.
+- `SCREAMING_SNAKE_CASE` for constants and statics.
+
+Use descriptive names.
+
+Avoid abbreviations unless they are widely understood.
+
+Prefer explicit code over unnecessarily compact expressions.
+
+Run `cargo fmt` and ensure code passes `cargo clippy` without unexplained warnings.
+
+## 4. Type Safety
+
+Use Rust's type system to express domain constraints.
+
+- Prefer specific types over primitive values when they represent distinct domain concepts.
+- Use enums for finite sets of states.
+- Use `Option<T>` for genuinely optional values.
+- Avoid ambiguous sentinel values.
+- Avoid unnecessary `String` and primitive conversions.
+- Validate data at system boundaries.
+
+Do not use `unwrap()` or `expect()` in normal application paths.
+
+They may be acceptable in tests or where an invariant is explicitly guaranteed and documented.
+
+Avoid excessive cloning. Prefer borrowing and ownership transfer when appropriate.
+
+## 5. Error Handling
+
+Use explicit and meaningful error handling.
+
+- Prefer `Result<T, E>` for fallible operations.
+- Use appropriate error types for domain and infrastructure failures.
+- Preserve useful error context.
+- Avoid silently swallowing errors.
+- Do not use panics for expected runtime failures.
+- Translate errors only at appropriate architectural boundaries.
+
+Use a consistent error-handling strategy within each subsystem.
+
+Do not introduce a large error-handling framework unless the project genuinely needs it.
+
+## 6. Async and Concurrency
+
+Use asynchronous Rust when operations involve non-blocking I/O or when concurrency provides a concrete benefit.
+
+Do not make every function asynchronous by default.
+
+Avoid blocking the async runtime with expensive synchronous operations.
+
+Use appropriate mechanisms for CPU-intensive work.
+
+Concurrency must have clear ownership and synchronization rules.
+
+Avoid unnecessary shared mutable state.
+
+When using locks, keep critical sections short and avoid holding locks across unrelated operations or await points unless explicitly justified.
+
+## 7. Filesystem Operations
+
+Filesystem operations require particular care because the Vault contains user-owned data.
+
+- Do not overwrite files without considering external modifications.
+- Handle missing files and permission errors explicitly.
+- Avoid assuming that filesystem operations always succeed.
+- Prefer safe write strategies.
+- Consider atomic replacement where appropriate.
+- Detect incomplete or conflicting writes.
+- Preserve original file contents whenever possible.
+- Avoid unnecessary filesystem scans.
+
+Do not assume that Amethyst is the only application modifying a Vault.
+
+External editors, Obsidian and Git may modify files independently.
+
+## 8. Data Serialization
+
+Preserve compatibility with existing file formats.
+
+- Do not discard unknown fields during parsing and serialization.
+- Avoid unnecessary reformatting of YAML and Markdown.
+- Preserve information that the application does not understand.
+- Validate data before writing it.
+- Keep serialization behavior explicit and testable.
+
+Do not introduce proprietary formats for existing Obsidian content without an explicit architectural decision.
+
+## 9. Memory and Performance
+
+Avoid unnecessary allocations and copying.
+
+Prefer efficient data structures appropriate to the use case.
+
+Do not optimize prematurely.
+
+When performance is important, identify the actual bottleneck before introducing complex optimizations.
+
+Consider large Vaults when designing indexing, searching and filesystem operations.
+
+Avoid loading entire Vaults into memory without a concrete reason.
+
+## 10. Dependencies
+
+Prefer mature and actively maintained Rust crates.
+
+Before adding a dependency:
+
+- Check whether the standard library already provides the required functionality.
+- Evaluate maintenance status.
+- Consider security implications.
+- Consider compilation time and binary size.
+- Check licensing.
+- Ensure compatibility with the current architecture.
+
+Avoid unnecessary dependencies and overlapping libraries.
+
+Do not update major dependency versions without checking compatibility.
+
+## 11. Logging and Diagnostics
+
+Use structured and meaningful logging.
+
+Log errors with sufficient context to diagnose failures.
+
+Avoid logging:
+
+- Passwords.
+- Authentication tokens.
+- Private keys.
+- Sensitive user content.
+- Other secrets.
+
+Do not use logging as a replacement for proper error handling.
+
+## 12. Testing
+
+Write tests for meaningful business logic and failure scenarios.
+
+Prefer:
+
+- Unit tests for individual functions and domain behavior.
+- Integration tests for interactions between modules.
+- Filesystem tests using isolated temporary directories.
+- Regression tests for previously discovered bugs.
+
+Test both successful and unsuccessful execution paths.
+
+For file operations, test:
+
+- Missing files.
+- Permission failures where practical.
+- External modifications.
+- Interrupted or failed writes.
+- Conflicting changes.
+- Recovery behavior.
+
+Do not rely exclusively on tests that verify implementation details.
+
+## 13. Tauri Backend
+
+Keep Tauri-specific code outside Amethyst Core.
+
+Tauri commands should:
+
+1. Receive and validate frontend input.
+2. Invoke the appropriate Core interface.
+3. Convert the result into a frontend-compatible response.
+4. Return meaningful errors.
+
+Do not put domain logic, filesystem business rules or synchronization algorithms directly into Tauri commands.
+
+Expose only the capabilities required by the frontend.
+
+## 14. Documentation
+
+Document public APIs and non-obvious behavior.
+
+Add comments when they explain:
+
+- Why a particular approach is necessary.
+- Important invariants.
+- Non-obvious ownership or concurrency decisions.
+- Safety requirements.
+- Compatibility constraints.
+
+Avoid comments that simply repeat what the code already says.
+
+## 15. General Rule
+
+When choosing between a simple, explicit implementation and a complicated abstraction, prefer the simple implementation unless there is a demonstrated need for additional complexity.
