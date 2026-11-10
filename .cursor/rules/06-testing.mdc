@@ -1,0 +1,257 @@
+---
+description: Testing standards and quality requirements for the Amethyst project.
+alwaysApply: true
+---
+
+# Amethyst — Testing Rules
+
+## 1. General Principles
+
+Testing is a required part of development, not an optional final step.
+
+Write tests that verify actual application behavior.
+
+Prioritize:
+
+- Correctness.
+- Data integrity.
+- Regression prevention.
+- Obsidian compatibility.
+- Cross-platform behavior.
+- Reliability of backend operations.
+
+Do not consider a feature complete merely because the code compiles.
+
+## 2. Rust Core Tests
+
+The Rust Core is the primary location for business logic.
+
+Test Core functionality independently from Tauri.
+
+Prioritize unit tests for:
+
+- Markdown parsing and processing.
+- Wikilink resolution.
+- Frontmatter and Properties.
+- Note operations.
+- Vault path resolution.
+- Search and indexing.
+- Template processing.
+- Bases and Analytics when implemented.
+- Git synchronization logic.
+- Error handling.
+
+Keep tests close to the modules they cover where appropriate.
+
+Use integration tests when behavior involves multiple Core modules.
+
+## 3. Filesystem and Vault Tests
+
+Filesystem operations require particular attention.
+
+Use isolated temporary directories and test Vault fixtures.
+
+Never run destructive tests against a real user Vault.
+
+Test:
+
+- Creating notes.
+- Reading and updating notes.
+- Renaming and moving files.
+- Deleting and recovering files.
+- Attachment operations.
+- Nested directories.
+- Unicode filenames.
+- Invalid paths.
+- Permission errors.
+- Missing files.
+- External modifications.
+- Concurrent modifications.
+- Interrupted writes.
+
+Verify that failed operations do not corrupt or silently destroy existing data.
+
+## 4. Obsidian Compatibility Tests
+
+Maintain dedicated test fixtures representing real Obsidian Vault content.
+
+Test:
+
+- Standard Markdown.
+- Wikilinks and aliases.
+- Heading and block references.
+- Embeds.
+- YAML frontmatter.
+- Unknown Properties.
+- Nested tags.
+- Callouts.
+- Attachments.
+- Daily Notes.
+- Templates.
+- Unsupported Obsidian-specific syntax.
+
+Verify that reading and saving documents preserves unrelated content and metadata.
+
+Compatibility regressions must be treated as important bugs.
+
+## 5. React Frontend Tests
+
+Test meaningful frontend behavior.
+
+Prioritize:
+
+- Component rendering.
+- User interactions.
+- Workspace state transitions.
+- Tab management.
+- Panel visibility.
+- Keyboard navigation.
+- Forms and validation.
+- Loading states.
+- Error states.
+- Backend communication.
+
+Prefer tests that verify what the user can observe and do.
+
+Avoid tests that depend excessively on internal component implementation details.
+
+## 6. Tauri Integration Tests
+
+Test the integration between React, Tauri and Rust Core.
+
+Verify:
+
+- Command arguments and responses.
+- Serialization and deserialization.
+- Error propagation.
+- Correct command behavior.
+- Communication with Core services.
+
+Keep business logic tests independent from the Tauri runtime whenever possible.
+
+## 7. End-to-End Tests
+
+Use end-to-end tests for important complete workflows.
+
+Prioritize:
+
+- Opening an existing Vault.
+- Browsing notes.
+- Creating and editing a note.
+- Saving changes.
+- Following internal links.
+- Searching the Vault.
+- Editing Properties.
+- Working with attachments.
+- Creating Daily Notes.
+- Performing Git synchronization.
+- Recovering from conflicts.
+
+E2E tests should cover critical user journeys rather than every minor UI detail.
+
+## 8. Regression Testing
+
+When fixing a bug:
+
+1. Understand the root cause.
+2. Add a regression test that reproduces the issue when practical.
+3. Implement the fix.
+4. Run the relevant tests.
+5. Verify that the fix does not break related functionality.
+
+Do not remove or weaken an existing test merely because the current implementation fails it.
+
+If a test is outdated or incorrect, explain why before changing it.
+
+## 9. Cross-Platform Testing
+
+Amethyst targets Windows and Linux for the desktop MVP.
+
+Account for platform differences involving:
+
+- Filesystem paths.
+- File permissions.
+- Case sensitivity.
+- File watchers.
+- Atomic file operations.
+- Git behavior.
+- Window and application lifecycle.
+
+Do not assume that code working on one operating system will behave identically on another.
+
+Test platform-specific behavior where relevant.
+
+## 10. Performance Testing
+
+Performance is an important product requirement.
+
+Avoid introducing performance tests for every small function.
+
+Benchmark operations where performance has a meaningful impact:
+
+- Opening large Vaults.
+- Initial indexing.
+- Incremental indexing.
+- Full-text search.
+- Large note rendering.
+- Workspace restoration.
+- Git operations on large repositories.
+
+Use representative datasets rather than only tiny test examples.
+
+Do not optimize based solely on assumptions.
+
+## 11. Test Quality
+
+Tests must be:
+
+- Deterministic.
+- Isolated where practical.
+- Readable.
+- Maintainable.
+- Focused on specific behavior.
+
+Avoid unnecessary mocks when real isolated implementations can be used.
+
+Do not introduce arbitrary delays to make asynchronous tests pass.
+
+Clean up temporary files and resources after tests.
+
+Tests must not depend on external services unless explicitly designed as integration tests.
+
+## 12. Development Workflow
+
+For non-trivial tasks:
+
+1. Inspect the relevant code and existing tests.
+2. Identify the behavior that needs to change.
+3. Determine which tests should be added or updated.
+4. Implement the change.
+5. Run relevant tests.
+6. Run broader checks when appropriate.
+7. Review the results and report any remaining limitations.
+
+Use the project's configured formatting, linting and type-checking tools.
+
+Do not claim that tests passed unless they were actually executed successfully.
+
+If a test cannot be run, explain why.
+
+## 13. MVP Quality Requirements
+
+Before considering an MVP feature complete, verify:
+
+- Its expected behavior works.
+- Relevant error cases are handled.
+- User data remains safe.
+- Obsidian compatibility is preserved where applicable.
+- Relevant tests pass.
+- No known critical regression remains.
+
+Data integrity and compatibility failures must not be ignored merely to meet a development deadline.
+
+## 14. General Rule
+
+Tests are part of the feature itself.
+
+Prefer a smaller implementation with reliable tests over a larger implementation whose correctness has not been verified.

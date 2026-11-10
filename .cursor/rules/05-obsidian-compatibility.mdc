@@ -1,0 +1,239 @@
+---
+description: Rules for preserving compatibility with existing Obsidian Vaults and Obsidian-specific formats.
+alwaysApply: true
+---
+
+# Amethyst — Obsidian Compatibility Rules
+
+## 1. Fundamental Principle
+
+Compatibility with existing Obsidian Vaults is a core product requirement.
+
+Amethyst must work directly with existing Vaults without requiring migration, conversion or restructuring.
+
+A Vault opened in Amethyst must remain usable in Obsidian.
+
+Never assume that a Vault contains only standard Markdown.
+
+Preserve unsupported and unrecognized content rather than removing or modifying it.
+
+## 2. Markdown Compatibility
+
+Support standard Markdown syntax and preserve its original meaning.
+
+Pay particular attention to:
+
+- Headings.
+- Paragraphs and line breaks.
+- Ordered and unordered lists.
+- Nested lists.
+- Checkboxes.
+- Tables.
+- Blockquotes.
+- Code blocks and inline code.
+- Links and images.
+- Emphasis and formatting.
+- Horizontal rules.
+
+Do not unnecessarily rewrite the entire Markdown document when modifying a small part of it.
+
+Preserve formatting and syntax that the application does not need to modify.
+
+## 3. Wikilinks
+
+Support Obsidian-style internal links:
+
+- `[[Note]]`
+- `[[Note|Display name]]`
+- `[[Note#Heading]]`
+- `[[Note#Heading|Display name]]`
+- `[[#Heading]]`
+- `[[Note^block-id]]`
+
+Account for:
+
+- Links to notes in nested folders.
+- Links with aliases.
+- Links to headings and blocks.
+- Missing or unresolved links.
+- Duplicate note names.
+- Configurable link resolution behavior where appropriate.
+
+Do not assume that a link target can always be resolved using its filename alone.
+
+Preserve the original link syntax when editing documents.
+
+## 4. Embeds
+
+Support Obsidian-style embeds:
+
+- `![[Note]]`
+- `![[Note#Heading]]`
+- `![[image.png]]`
+- `![[document.pdf]]`
+
+Account for embeds of different file types.
+
+Preserve embed syntax even when the embedded content cannot be rendered.
+
+Do not replace unsupported embeds with destructive placeholders.
+
+## 5. YAML Frontmatter and Properties
+
+Frontmatter is an important part of Obsidian Vaults.
+
+Support reading and editing YAML frontmatter while preserving:
+
+- Unknown properties.
+- Unsupported property types.
+- Nested structures.
+- Lists and arrays.
+- Dates and other scalar values.
+- Existing metadata that Amethyst does not understand.
+
+Do not silently discard properties when saving a note.
+
+Avoid unnecessary changes to YAML formatting, key ordering and unrelated values.
+
+The visual Properties editor must modify only the properties the user intends to change.
+
+Do not assume that every YAML value should be converted into a string.
+
+## 6. Tags
+
+Support Obsidian tags:
+
+- Inline tags such as `#project`.
+- Nested tags such as `#project/work`.
+- Tags stored in frontmatter.
+
+Preserve tag spelling and hierarchy.
+
+Avoid treating text that merely resembles a tag as an actual tag without considering Markdown context.
+
+## 7. Callouts
+
+Support Obsidian callout syntax, including:
+
+- Standard callouts.
+- Different callout types.
+- Custom titles.
+- Collapsible callouts.
+- Nested Markdown content.
+
+Preserve callout types and metadata even when a particular callout style is not supported.
+
+Do not convert callouts into ordinary blockquotes when saving a document.
+
+## 8. Attachments and File References
+
+Respect Obsidian's attachment conventions.
+
+- Preserve original attachment files.
+- Resolve attachment references correctly.
+- Support relative paths.
+- Support configured attachment folders.
+- Handle filenames containing spaces and Unicode characters.
+- Preserve file extensions and original formats.
+
+Never rename or move attachments without an explicit user action.
+
+When moving a note, account for links and embeds that may reference it.
+
+## 9. Daily Notes and Templates
+
+Daily Notes must remain compatible with existing Obsidian conventions.
+
+Account for:
+
+- Date-based note naming.
+- Configurable date formats.
+- Configurable Daily Notes folders.
+- Existing templates.
+- Internal links to daily notes.
+
+Basic template support in the MVP must not break existing template files.
+
+Do not silently rewrite templates into an Amethyst-specific format.
+
+## 10. Obsidian Configuration
+
+Do not assume that Amethyst controls the entire Vault.
+
+Obsidian configuration and plugin files may exist inside the Vault.
+
+- Do not delete or overwrite Obsidian configuration files.
+- Do not modify plugin settings without explicit user intent.
+- Do not assume that Amethyst understands every configuration option.
+- Keep Amethyst-specific settings separate from Obsidian settings.
+
+The presence of an unsupported configuration option must not prevent the Vault from opening unless it makes a specific operation unsafe.
+
+## 11. Unsupported Obsidian Features
+
+Some Obsidian features may not be implemented in the MVP.
+
+Examples include:
+
+- Third-party Obsidian plugins.
+- Advanced Canvas functionality.
+- Bases.
+- Advanced plugin-specific metadata.
+- Custom syntax introduced by individual plugins.
+
+Unsupported features must be handled conservatively.
+
+Preserve their underlying files and content.
+
+Do not claim compatibility with a plugin merely because its files can be opened.
+
+Amethyst will eventually have its own plugin API. Do not attempt to reproduce the entire Obsidian plugin API as an implicit requirement.
+
+## 12. Source Preservation
+
+The original Vault content must remain as intact as possible.
+
+When editing a note:
+
+1. Read and understand the relevant document structure.
+2. Identify the exact content that needs modification.
+3. Preserve unrelated Markdown and metadata.
+4. Preserve unsupported syntax.
+5. Verify that the resulting document remains valid and usable.
+
+Do not normalize the entire Vault or rewrite all notes during indexing.
+
+Indexing must be read-only with respect to original user files.
+
+## 13. Compatibility Testing
+
+Compatibility must be verified through dedicated tests.
+
+Maintain test fixtures containing representative Obsidian content:
+
+- Complex Markdown documents.
+- Wikilinks and aliases.
+- Heading and block references.
+- Embeds.
+- YAML frontmatter.
+- Unknown Properties.
+- Nested tags.
+- Callouts.
+- Attachments.
+- Daily Notes.
+- Templates.
+- Unicode and unusual filenames.
+
+Test both reading and writing.
+
+Verify that opening and saving a document does not unexpectedly change unrelated content.
+
+Where practical, test that the same Vault remains usable in Obsidian after modifications made by Amethyst.
+
+## 14. General Rule
+
+Obsidian compatibility is not achieved merely by supporting Markdown.
+
+Preserve the existing Vault's structure, semantics and unsupported content.
+
+When uncertain about the meaning of an Obsidian-specific construct, preserve it rather than guessing or converting it.
