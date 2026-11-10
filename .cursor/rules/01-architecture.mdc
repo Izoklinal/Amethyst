@@ -1,0 +1,202 @@
+---
+description: Architectural boundaries, dependency rules and application structure for Amethyst.
+alwaysApply: true
+---
+
+# Amethyst — Architecture Rules
+
+## 1. Architectural Overview
+
+Amethyst follows a layered, modular architecture.
+
+The application consists of three primary layers:
+
+1. **Amethyst Core** — business logic and domain functionality.
+2. **Tauri** — native application integration and platform-specific capabilities.
+3. **React** — user interface and presentation.
+
+Each layer must have clearly defined responsibilities.
+
+## 2. Rust Core
+
+Amethyst Core must be implemented as an independent Rust library crate.
+
+It must not depend on Tauri or frontend technologies.
+
+Core responsibilities include:
+
+- Vault management.
+- Notes and Markdown processing.
+- Links and backlinks.
+- Properties.
+- File indexing.
+- Search.
+- Templates.
+- Git synchronization.
+- Data integrity and recovery.
+- Application domain logic.
+
+Core business logic should be independently testable without launching the Tauri application.
+
+Prefer explicit interfaces and well-defined module boundaries.
+
+## 3. Tauri Layer
+
+Tauri is responsible for:
+
+- Application lifecycle.
+- Native window management.
+- Communication between React and Rust.
+- Filesystem and operating system integration.
+- Platform-specific functionality.
+- Exposing approved Core functionality to the frontend.
+
+Tauri commands must remain thin.
+
+A Tauri command should validate incoming arguments, invoke the appropriate Core functionality and return a suitable result.
+
+Do not implement business rules directly inside Tauri commands.
+
+Do not expose unnecessary native capabilities to the frontend.
+
+## 4. React Frontend
+
+React is responsible for:
+
+- Rendering the user interface.
+- User interaction.
+- Workspace presentation.
+- UI-specific state.
+- Navigation and component composition.
+- Displaying application data.
+- Sending user actions to the Rust backend.
+
+The frontend must not independently implement domain logic that belongs in Amethyst Core.
+
+Avoid duplicating business rules between Rust and TypeScript.
+
+## 5. Dependency Direction
+
+Maintain the following dependency direction:
+
+React → Tauri API → Amethyst Core
+
+Amethyst Core must remain independent of both React and Tauri.
+
+Avoid circular dependencies.
+
+Higher-level presentation and integration layers must not become the owners of domain logic.
+
+## 6. Core Module Organization
+
+The initial logical module boundaries are:
+
+- `vault`
+- `notes`
+- `markdown`
+- `links`
+- `properties`
+- `indexer`
+- `search`
+- `templates`
+- `bases`
+- `analytics`
+- `graph`
+- `canvas`
+- `calendar`
+- `sync`
+- `settings`
+
+These names describe logical responsibilities, not a requirement to implement every module immediately.
+
+Create modules when their functionality is needed.
+
+Do not introduce empty modules or abstractions for features outside the current development scope.
+
+## 7. Module Boundaries
+
+Each module should:
+
+- Have a clearly defined responsibility.
+- Expose only the interfaces required by other modules.
+- Keep implementation details private where practical.
+- Minimize coupling.
+- Avoid circular dependencies.
+- Be independently testable where appropriate.
+
+Do not allow unrelated modules to access internal implementation details directly.
+
+Prefer explicit APIs over shared mutable state.
+
+## 8. Shared Application State
+
+Application state must have clear ownership.
+
+- Domain state belongs in the Core.
+- UI-specific state belongs in React.
+- Platform and window state belongs in the Tauri layer.
+- Persistent user content belongs in the Vault.
+- Derived indexes and caches belong in internal storage.
+
+Avoid creating multiple competing sources of truth.
+
+Do not duplicate persistent domain data in frontend state or internal databases without a clear reason.
+
+## 9. Data Storage Boundaries
+
+The user's Vault is the source of truth for notes and other original content.
+
+Internal databases may store:
+
+- Search indexes.
+- Metadata indexes.
+- Cached information.
+- Derived relationships.
+- Analytical data.
+- Other recoverable application data.
+
+Internal storage must not silently replace or modify original user content.
+
+Derived data should be rebuildable from the Vault wherever practical.
+
+Application settings must remain separate from user note content.
+
+## 10. Cross-Platform Architecture
+
+The Core should remain platform-independent wherever practical.
+
+Platform-specific functionality must be isolated behind explicit interfaces.
+
+Do not introduce unnecessary operating system assumptions into domain logic.
+
+Windows and Linux are the initial desktop targets.
+
+Future Android support must not justify premature implementation of mobile-specific abstractions.
+
+## 11. Error Handling
+
+Errors must be explicit and handled at appropriate architectural boundaries.
+
+- Core modules should return meaningful errors.
+- Tauri should translate errors into suitable frontend responses.
+- React should present actionable error information to the user.
+- Errors must not be silently ignored.
+
+Avoid generic error handling that hides the original cause.
+
+## 12. Testing Boundaries
+
+Test each layer at the appropriate level:
+
+- Core: unit and integration tests.
+- Tauri: command and platform integration tests.
+- React: component and interaction tests.
+- Application: end-to-end tests.
+
+Prioritize testing of data integrity, file operations, synchronization and compatibility.
+
+## 13. Dependency Management
+
+Before introducing a new dependency:
+
+1. Determine whether existing
