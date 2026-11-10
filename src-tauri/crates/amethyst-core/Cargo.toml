@@ -1,0 +1,9 @@
+[package]
+name = "amethyst-core"
+version = "0.1.0"
+description = "Amethyst application core"
+edition = "2024"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

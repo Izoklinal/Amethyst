@@ -1,202 +1,420 @@
 ---
-description: Architectural boundaries, dependency rules and application structure for Amethyst.
+description: Architecture rules for Amethyst. Defines system layers, responsibilities, dependencies, module boundaries, and architectural constraints.
 alwaysApply: true
 ---
 
-# Amethyst — Architecture Rules
+# Amethyst Architecture Rules
 
-## 1. Architectural Overview
+## 1. Core Architecture Principles
 
-Amethyst follows a layered, modular architecture.
+Amethyst follows a layered architecture built around three main parts:
 
-The application consists of three primary layers:
+1. **Amethyst Core** — the independent Rust library containing application domain logic and core functionality.
+2. **Tauri Application** — the desktop application layer responsible for platform integration and communication between Core and the frontend.
+3. **React Frontend** — the presentation layer responsible for the user interface and user interaction.
 
-1. **Amethyst Core** — business logic and domain functionality.
-2. **Tauri** — native application integration and platform-specific capabilities.
-3. **React** — user interface and presentation.
+The architecture must prioritize:
 
-Each layer must have clearly defined responsibilities.
+- Clear separation of responsibilities.
+- Independence of core business logic from the UI and platform-specific frameworks.
+- Testability.
+- Data integrity and user data safety.
+- Cross-platform compatibility.
+- Maintainability and controlled complexity.
+- Reuse of the Core by potential future applications, including Android.
 
-## 2. Rust Core
+Do not introduce unnecessary architectural abstractions or complexity.
 
-Amethyst Core must be implemented as an independent Rust library crate.
+## 2. Amethyst Core
 
-It must not depend on Tauri or frontend technologies.
+Amethyst Core is the central part of the application.
 
-Core responsibilities include:
+It must be implemented as an independent Rust library crate (`lib.rs`), separate from the Tauri application crate.
+
+Core is responsible for application domain logic, including:
 
 - Vault management.
-- Notes and Markdown processing.
-- Links and backlinks.
-- Properties.
-- File indexing.
+- Note and file operations.
+- Markdown processing.
+- Internal links and backlinks.
+- Properties and frontmatter.
+- Indexing.
 - Search.
 - Templates.
-- Git synchronization.
-- Data integrity and recovery.
-- Application domain logic.
+- Bases.
+- Analytics.
+- Graph data.
+- Canvas data.
+- Calendar and Daily Notes logic.
+- Git synchronization logic.
+- Application domain settings and configuration logic where appropriate.
 
-Core business logic should be independently testable without launching the Tauri application.
+These responsibilities are logical areas of the Core, not a requirement to implement all features immediately.
 
-Prefer explicit interfaces and well-defined module boundaries.
+### Core independence
 
-## 3. Tauri Layer
+Amethyst Core must not depend on:
 
-Tauri is responsible for:
+- Tauri APIs.
+- React or frontend code.
+- WebView APIs.
+- Desktop-only UI frameworks.
 
-- Application lifecycle.
-- Native window management.
-- Communication between React and Rust.
-- Filesystem and operating system integration.
-- Platform-specific functionality.
-- Exposing approved Core functionality to the frontend.
+Core should expose clear Rust APIs that can be used by different application layers.
+
+The Core must be testable independently, without launching the Tauri application.
+
+Keep platform-specific functionality behind appropriate abstractions when it is necessary.
+
+## 3. Crate Structure
+
+The intended Rust structure is:
+
+```text
+src-tauri/
+├── Cargo.toml
+├── src/
+│   ├── main.rs
+│   └── lib.rs
+└── crates/
+    └── amethyst-core/
+        ├── Cargo.toml
+        └── src/
+            └── lib.rs
+```
+
+Responsibilities:
+
+- `main.rs` — application entry point.
+- `src/lib.rs` — Tauri application initialization and integration.
+- `crates/amethyst-core/` — independent Rust library containing core business logic.
+
+The Tauri application must depend on `amethyst-core`, not the other way around.
+
+The Core should not know that Tauri exists.
+
+### Cargo workspace
+
+The Rust project should use a Cargo workspace when the project structure is initialized.
+
+The Tauri application and Amethyst Core should be workspace members.
+
+Keep workspace-level dependency and configuration management consistent where appropriate.
+
+Do not create additional Cargo crates for every logical module.
+
+Start with one Core library crate and split it into additional crates only when there is a clear architectural or technical reason.
+
+## 4. Tauri Application Layer
+
+Tauri is responsible for desktop application integration.
+
+Its responsibilities include:
+
+- Application initialization.
+- Window management.
+- Native platform integration.
+- Tauri plugin integration where required.
+- Exposing Core functionality to the frontend through Tauri commands.
+- Managing communication between React and Amethyst Core.
+- Handling platform-specific concerns.
+
+### Tauri commands
 
 Tauri commands must remain thin.
 
-A Tauri command should validate incoming arguments, invoke the appropriate Core functionality and return a suitable result.
+A command should generally:
 
-Do not implement business rules directly inside Tauri commands.
+1. Receive and validate frontend input.
+2. Call the appropriate Core API.
+3. Convert the result into a frontend-compatible response.
+4. Return the result or an appropriate error.
 
-Do not expose unnecessary native capabilities to the frontend.
+Do not place substantial business logic inside Tauri commands.
 
-## 4. React Frontend
+Do not duplicate Core functionality in the Tauri layer.
 
-React is responsible for:
+If a command becomes complex, move the relevant logic into Core or an appropriate application service.
 
-- Rendering the user interface.
-- User interaction.
-- Workspace presentation.
-- UI-specific state.
-- Navigation and component composition.
+Tauri-specific functionality must remain outside Core.
+
+## 5. React Frontend
+
+React is responsible for presentation and user interaction.
+
+Its responsibilities include:
+
+- Rendering the application interface.
+- Managing UI state.
+- Handling user interactions.
 - Displaying application data.
-- Sending user actions to the Rust backend.
+- Managing workspace layout and panels.
+- Providing editor and navigation interfaces.
+- Communicating with the backend through a centralized, typed Tauri API layer.
 
-The frontend must not independently implement domain logic that belongs in Amethyst Core.
+React must not become the source of truth for application domain logic.
 
-Avoid duplicating business rules between Rust and TypeScript.
+Do not implement filesystem operations, Vault management, Markdown parsing, indexing, Git synchronization, or other domain logic directly in React.
 
-## 5. Dependency Direction
+The frontend should request these operations through the Tauri layer.
 
-Maintain the following dependency direction:
+Keep frontend components focused and modular.
 
-React → Tauri API → Amethyst Core
+Avoid unnecessary coupling between UI components and backend implementation details.
 
-Amethyst Core must remain independent of both React and Tauri.
+## 6. Dependency Direction
 
-Avoid circular dependencies.
+The intended dependency direction is:
 
-Higher-level presentation and integration layers must not become the owners of domain logic.
+```text
+React Frontend
+      |
+      v
+Tauri Application Layer
+      |
+      v
+Amethyst Core
+```
 
-## 6. Core Module Organization
+More precisely:
 
-The initial logical module boundaries are:
+- React communicates with the Tauri application API.
+- Tauri invokes Core functionality.
+- Core remains independent of both Tauri and React.
 
-- `vault`
-- `notes`
-- `markdown`
-- `links`
-- `properties`
-- `indexer`
-- `search`
-- `templates`
-- `bases`
-- `analytics`
-- `graph`
-- `canvas`
-- `calendar`
-- `sync`
-- `settings`
+The following dependencies are prohibited:
 
-These names describe logical responsibilities, not a requirement to implement every module immediately.
+- Core depending on Tauri.
+- Core depending on React or frontend-specific libraries.
+- Core depending on WebView APIs.
+- Frontend directly accessing internal Core implementation details.
+- Domain logic being duplicated across multiple layers.
 
-Create modules when their functionality is needed.
+Shared types and communication contracts should be designed deliberately.
 
-Do not introduce empty modules or abstractions for features outside the current development scope.
+Do not introduce circular dependencies between modules or layers.
 
-## 7. Module Boundaries
+## 7. Core Module Organization
+
+Amethyst Core should be organized into logical modules with clear responsibilities.
+
+Expected logical areas include:
+
+- `vault` — Vault discovery, opening, lifecycle, and filesystem access.
+- `notes` — note operations and note-related domain logic.
+- `markdown` — Markdown processing and compatibility.
+- `links` — internal links, backlinks, and relationship resolution.
+- `properties` — frontmatter and Properties handling.
+- `indexer` — indexing and synchronization with external filesystem changes.
+- `search` — search functionality.
+- `templates` — template processing.
+- `bases` — Bases data and query logic.
+- `analytics` — derived statistics and analytical calculations.
+- `graph` — graph data and relationship models.
+- `canvas` — Canvas data and operations.
+- `calendar` — calendar and Daily Notes domain logic.
+- `sync` — Git synchronization and conflict management.
+- `settings` — application configuration and settings logic.
+
+This is an architectural guide, not a requirement to create every module immediately.
+
+Create modules when functionality actually requires them.
+
+### Module boundaries
 
 Each module should:
 
 - Have a clearly defined responsibility.
-- Expose only the interfaces required by other modules.
-- Keep implementation details private where practical.
-- Minimize coupling.
-- Avoid circular dependencies.
-- Be independently testable where appropriate.
+- Expose a small and understandable public API.
+- Avoid accessing another module's internal implementation directly.
+- Keep implementation details private whenever possible.
+- Avoid unnecessary coupling.
 
-Do not allow unrelated modules to access internal implementation details directly.
+When one module needs functionality from another, use its public API.
 
-Prefer explicit APIs over shared mutable state.
+Do not create abstractions solely for the sake of abstraction.
 
-## 8. Shared Application State
+### State ownership
 
-Application state must have clear ownership.
+Keep ownership of application state explicit.
 
-- Domain state belongs in the Core.
-- UI-specific state belongs in React.
-- Platform and window state belongs in the Tauri layer.
-- Persistent user content belongs in the Vault.
-- Derived indexes and caches belong in internal storage.
+Avoid maintaining multiple independent copies of the same authoritative data.
 
-Avoid creating multiple competing sources of truth.
+The Vault remains the source of truth for user notes and their content.
 
-Do not duplicate persistent domain data in frontend state or internal databases without a clear reason.
+The local database may contain derived indexes, caches, and other rebuildable information, but must not become an alternative source of truth.
 
-## 9. Data Storage Boundaries
+## 8. Vault and Data Architecture
 
-The user's Vault is the source of truth for notes and other original content.
+The user's existing Obsidian Vault is the primary source of truth.
 
-Internal databases may store:
+Amethyst must work directly with existing Vault files.
+
+Do not require migration, conversion, or restructuring of the user's Vault.
+
+Preserve:
+
+- Existing directory structure.
+- Original Markdown files.
+- Existing frontmatter and Properties.
+- Unknown or unsupported metadata.
+- Attachments.
+- Obsidian-specific syntax that Amethyst does not yet support.
+
+Unknown data must not be silently deleted or rewritten.
+
+### Local database
+
+A local database may be used for:
 
 - Search indexes.
-- Metadata indexes.
-- Cached information.
-- Derived relationships.
-- Analytical data.
-- Other recoverable application data.
+- Full-text search.
+- Note relationships.
+- Cached metadata.
+- Derived analytical data.
+- Other performance-related data.
 
-Internal storage must not silently replace or modify original user content.
+The database must be rebuildable from the Vault wherever possible.
 
-Derived data should be rebuildable from the Vault wherever practical.
+Do not treat derived database data as authoritative user content.
 
-Application settings must remain separate from user note content.
+### Filesystem access
 
-## 10. Cross-Platform Architecture
+All filesystem operations that affect user data must follow the data-integrity rules defined in:
 
-The Core should remain platform-independent wherever practical.
+`.cursor/rules/04-data-integrity.mdc`
 
-Platform-specific functionality must be isolated behind explicit interfaces.
+Do not bypass those rules for convenience.
 
-Do not introduce unnecessary operating system assumptions into domain logic.
+## 9. Cross-Platform Architecture
 
-Windows and Linux are the initial desktop targets.
+The primary desktop platforms are Windows and Linux.
 
-Future Android support must not justify premature implementation of mobile-specific abstractions.
+Android is a future companion application and is not part of the MVP.
 
-## 11. Error Handling
+The architecture should allow reuse of Amethyst Core by future platform-specific applications.
 
-Errors must be explicit and handled at appropriate architectural boundaries.
+Keep platform-specific behavior isolated from Core.
 
-- Core modules should return meaningful errors.
-- Tauri should translate errors into suitable frontend responses.
-- React should present actionable error information to the user.
-- Errors must not be silently ignored.
+Do not introduce desktop-only assumptions into domain logic unless they are explicitly required and isolated.
 
-Avoid generic error handling that hides the original cause.
+Do not implement Android-specific functionality during MVP development unless explicitly requested.
 
-## 12. Testing Boundaries
+The desktop application remains the primary product.
 
-Test each layer at the appropriate level:
+## 10. Error Handling
 
-- Core: unit and integration tests.
-- Tauri: command and platform integration tests.
-- React: component and interaction tests.
-- Application: end-to-end tests.
+Errors must be handled explicitly at architectural boundaries.
 
-Prioritize testing of data integrity, file operations, synchronization and compatibility.
+Core should expose meaningful Rust errors using appropriate error types.
 
-## 13. Dependency Management
+Tauri should translate backend errors into responses that the frontend can handle consistently.
 
-Before introducing a new dependency:
+React should display understandable errors to the user.
 
-1. Determine whether existing
+Do not silently ignore errors.
+
+Do not use panics as normal application error handling.
+
+Do not report an operation as successful before it has actually completed successfully.
+
+Preserve enough context to diagnose failures without exposing sensitive user data.
+
+## 11. Testing Architecture
+
+Each layer should be testable independently.
+
+### Amethyst Core
+
+Prioritize:
+
+- Unit tests for domain logic.
+- Integration tests for interactions between Core modules.
+- Filesystem and Vault tests.
+- Git synchronization tests.
+- Data integrity and recovery tests.
+- Obsidian compatibility tests.
+
+### Tauri
+
+Test:
+
+- Command input and output contracts.
+- Core integration.
+- Error conversion.
+- Platform-specific behavior where appropriate.
+
+### React
+
+Test:
+
+- Components.
+- User interactions.
+- State management.
+- Frontend/backend communication contracts.
+- Workspace behavior.
+
+### End-to-end
+
+Test critical user workflows across the complete application.
+
+Data integrity and compatibility with existing Obsidian Vaults are especially important.
+
+## 12. Dependencies and External Libraries
+
+Add dependencies only when they provide clear value.
+
+Before introducing a dependency:
+
+1. Understand what problem it solves.
+2. Check whether existing project functionality already solves the problem.
+3. Consider maintenance, security, compatibility, and performance.
+4. Prefer well-maintained and established libraries.
+5. Avoid introducing large dependencies for small isolated tasks.
+
+Do not add dependencies merely because they are popular.
+
+Keep Rust and frontend dependencies in their appropriate layers.
+
+Avoid coupling Core to platform-specific or UI-specific libraries.
+
+## 13. Architectural Changes
+
+Do not silently change the established architecture.
+
+If a task requires an architectural change:
+
+1. Identify the reason the current architecture is insufficient.
+2. Explain the proposed change.
+3. Describe its impact on existing modules and layers.
+4. Consider simpler alternatives.
+5. Explain the risks and benefits.
+6. Present the proposal before implementing a significant architectural change.
+
+Wait for approval before making significant architectural changes.
+
+Record approved architectural decisions in:
+
+`docs/DECISIONS.md`
+
+Keep `docs/ARCHITECTURE.md` consistent with the actual architecture.
+
+If implementation reveals that an architectural assumption is incorrect, explain the issue and propose an adjustment rather than silently working around it.
+
+## 14. General Architectural Philosophy
+
+Always prefer:
+
+- Clear responsibilities over tightly coupled code.
+- Simple solutions over unnecessary abstractions.
+- Explicit interfaces over hidden dependencies.
+- Testable domain logic over framework-dependent business logic.
+- Data integrity over implementation convenience.
+- Incremental development over premature complexity.
+- Reuse of existing functionality over duplication.
+
+Do not implement future features prematurely.
+
+Do not introduce architectural complexity solely because a feature may be needed someday.
+
+The architecture should support the long-term vision of Amethyst while keeping the MVP focused, understandable, and maintainable.

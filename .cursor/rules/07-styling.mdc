@@ -1,0 +1,498 @@
+---
+description: Styling architecture and CSS conventions for Amethyst. Defines design tokens, component styling, themes, and visual consistency requirements.
+globs: 
+alwaysApply: true
+---
+
+# Amethyst Styling Rules
+
+## 1. General Principles
+
+The styling architecture must prioritize:
+
+- Visual consistency across the entire application.
+- Reusability of styles and UI components.
+- Clear separation between structure, behavior, and presentation.
+- Maintainability and predictable CSS behavior.
+- Support for light and dark themes.
+- Future user customization.
+- Accessibility.
+- Avoidance of duplicated and conflicting styles.
+
+Do not treat styling as an isolated implementation detail.
+
+Every UI change must respect the existing design system and styling architecture.
+
+Before creating new styles, inspect the existing styling conventions and reuse established solutions.
+
+Do not introduce a new styling approach without a clear reason.
+
+## 2. Styling Architecture
+
+Use a centralized design system combined with locally scoped component styles.
+
+The intended approach is:
+
+- CSS Variables for design tokens and theme values.
+- CSS Modules for component-specific styles.
+- Global CSS only for genuinely global concerns.
+- Shared UI components for reusable interface elements.
+
+Avoid mixing multiple styling methodologies without an explicit architectural reason.
+
+Do not introduce Tailwind CSS, styled-components, Emotion, or another styling framework unless explicitly approved.
+
+Do not introduce a second styling system alongside the established one.
+
+### Suggested structure
+
+```text
+src/
+├── styles/
+│   ├── tokens.css
+│   ├── themes.css
+│   ├── global.css
+│   └── typography.css
+├── components/
+│   ├── ui/
+│   │   ├── Button/
+│   │   │   ├── Button.tsx
+│   │   │   └── Button.module.css
+│   │   ├── Input/
+│   │   └── Dialog/
+│   └── workspace/
+│       ├── Sidebar/
+│       ├── Editor/
+│       └── ...
+```
+
+This is a suggested organization, not a requirement to create all files or directories immediately.
+
+Adapt the structure to the actual project.
+
+Keep styles close to their corresponding components when they are component-specific.
+
+Keep shared tokens and global styles centralized.
+
+## 3. Design Tokens
+
+All recurring visual values must be centralized in design tokens.
+
+Use CSS custom properties for:
+
+- Colors.
+- Backgrounds and surfaces.
+- Text colors.
+- Borders.
+- Spacing.
+- Typography.
+- Border radii.
+- Shadows.
+- Component dimensions where shared.
+- Transitions and animation durations.
+- Layering and z-index values.
+
+Avoid scattering hardcoded visual values throughout component styles.
+
+### Semantic tokens
+
+Prefer semantic tokens over tokens named after specific colors.
+
+Examples:
+
+```css
+:root {
+  --color-background: #ffffff;
+  --color-surface: #f5f5f5;
+  --color-surface-hover: #eeeeee;
+
+  --color-text-primary: #202020;
+  --color-text-secondary: #707070;
+
+  --color-border: #dedede;
+  --color-accent: #6750a4;
+
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+
+  --radius-small: 4px;
+  --radius-medium: 8px;
+  --radius-large: 12px;
+}
+```
+
+The values above are illustrative defaults, not a finalized Amethyst visual design.
+
+Do not introduce new token names for values that already have an appropriate token.
+
+If a new recurring visual value is needed, consider whether it belongs in the centralized token system.
+
+Avoid creating tokens for every isolated one-off value.
+
+### Semantic naming
+
+Prefer:
+
+- `--color-surface`
+- `--color-text-primary`
+- `--color-border`
+- `--spacing-3`
+- `--radius-medium`
+
+Avoid:
+
+- `--gray-17`
+- `--blue-for-sidebar`
+- `--special-button-color`
+- `--random-margin`
+
+Token names should describe their purpose rather than their current appearance or individual usage.
+
+## 4. Theme Architecture
+
+Amethyst must support at least:
+
+- Light theme.
+- Dark theme.
+
+The styling architecture must allow additional themes and user customization in the future.
+
+Theme-dependent colors must be defined through semantic CSS variables.
+
+For example:
+
+```css
+[data-theme="light"] {
+  --color-background: #ffffff;
+  --color-surface: #f5f5f5;
+  --color-text-primary: #202020;
+  --color-border: #dedede;
+}
+
+[data-theme="dark"] {
+  --color-background: #1e1e1e;
+  --color-surface: #252525;
+  --color-text-primary: #eeeeee;
+  --color-border: #3a3a3a;
+}
+```
+
+These values are examples only.
+
+### Theme requirements
+
+- Components must not depend on a specific theme.
+- Components must consume semantic tokens.
+- Theme changes must not require rewriting individual component styles.
+- Avoid hardcoded light-theme or dark-theme colors inside component styles.
+- Preserve sufficient contrast and readability.
+- Theme-specific exceptions must be explicit and justified.
+
+Do not implement a separate copy of every component for each theme.
+
+The same components should work across all supported themes.
+
+## 5. CSS Modules and Component Styles
+
+Use CSS Modules for component-specific styling.
+
+Example:
+
+```tsx
+import styles from "./Button.module.css";
+
+export function Button() {
+  return (
+    <button className={styles.button}>
+      Save
+    </button>
+  );
+}
+```
+
+Component styles should be scoped and predictable.
+
+### Rules
+
+- Use clear and descriptive class names.
+- Keep component styles in the corresponding CSS Module.
+- Avoid global selectors for component-specific behavior.
+- Avoid styling components through unrelated parent selectors.
+- Avoid unnecessary selector nesting.
+- Avoid overly specific selectors.
+- Avoid `!important` unless there is a documented and justified reason.
+- Avoid duplicate declarations and conflicting overrides.
+- Do not create multiple classes that represent the same visual responsibility.
+- Do not use CSS Modules as a reason to duplicate shared design tokens.
+
+Do not solve a styling problem by repeatedly adding overrides.
+
+Find and correct the original source of the problem whenever possible.
+
+## 6. Global CSS
+
+Global CSS must remain small and intentional.
+
+Appropriate global responsibilities include:
+
+- CSS resets or normalization.
+- Base typography.
+- Root-level layout.
+- Global design tokens.
+- Theme definitions.
+- Basic document and application container styles.
+- Truly global utility behavior when justified.
+
+Do not put individual component styles into global CSS.
+
+Avoid broad selectors that unintentionally affect unrelated components.
+
+Do not use global element selectors to implement component-specific visual behavior.
+
+## 7. Shared UI Components
+
+Create reusable UI components when the same interface element or behavior is needed in multiple places.
+
+Examples include:
+
+- Buttons.
+- Inputs.
+- Selects.
+- Checkboxes.
+- Tooltips.
+- Dialogs.
+- Dropdowns.
+- Tabs.
+- Context menus.
+- Toolbars.
+- Resizers.
+- Scroll areas.
+
+Prefer one configurable shared component over multiple independently implemented versions of the same element.
+
+Shared components should have:
+
+- Clear responsibilities.
+- Explicit and typed props.
+- Consistent visual behavior.
+- Consistent interaction states.
+- Accessibility support.
+- Theme compatibility.
+
+Do not create abstractions for elements that are used only once unless there is a meaningful architectural reason.
+
+Do not make shared components excessively configurable.
+
+Avoid premature component generalization.
+
+## 8. Layout and Workspace
+
+Workspace is one of the most important parts of Amethyst.
+
+Its layout must support:
+
+- Multiple panels.
+- Resizable sidebars.
+- Editor groups.
+- Split views.
+- Tabs.
+- Dockable or movable panels where applicable.
+- Hidden and visible panels.
+- Different workspace arrangements.
+
+### Layout rules
+
+- Prefer Flexbox and CSS Grid for layout.
+- Avoid absolute positioning for ordinary document layout.
+- Use absolute positioning only when the UI behavior genuinely requires it.
+- Avoid fixed pixel dimensions when the layout should adapt to available space.
+- Define minimum and maximum dimensions where needed.
+- Prevent unintended overflow.
+- Keep scrolling behavior explicit.
+- Avoid layout changes caused by decorative styling.
+- Ensure that resizing one panel does not unexpectedly affect unrelated panels.
+
+Use shared layout conventions and tokens where appropriate.
+
+Do not independently implement competing layout systems inside different workspace components.
+
+## 9. Inline Styles
+
+Avoid inline styles for ordinary visual presentation.
+
+Do not use inline styles as a replacement for CSS Modules.
+
+Use CSS classes and design tokens whenever possible.
+
+Inline styles may be appropriate when a value is genuinely dynamic and calculated at runtime, for example:
+
+- A panel width controlled by a resizer.
+- A dynamic position calculated by a layout engine.
+- A value provided by user customization.
+- A runtime dimension that cannot reasonably be represented by a predefined class.
+
+Even in these cases, prefer CSS custom properties when they provide a cleaner separation.
+
+Do not hardcode recurring visual values inside React components.
+
+## 10. Responsive and Adaptive Layout
+
+Although desktop is the primary platform, layouts must be resilient to different window sizes.
+
+Consider:
+
+- Narrow application windows.
+- Different desktop resolutions.
+- Window resizing.
+- High-DPI displays.
+- Different operating system scaling settings.
+
+Do not assume the application always runs maximized.
+
+Avoid unnecessary fixed widths and heights.
+
+Ensure important interface elements remain accessible when space is limited.
+
+Do not implement Android-specific styling as part of the desktop MVP.
+
+## 11. Interaction States
+
+Interactive components must have consistent visual states.
+
+Consider:
+
+- Default.
+- Hover.
+- Active.
+- Focus.
+- Disabled.
+- Selected.
+- Loading.
+- Error.
+- Dragging, when applicable.
+
+Use shared design tokens and consistent behavior.
+
+Do not invent unrelated hover, focus, or active styles for every component.
+
+Keyboard navigation and visible focus indicators must be preserved.
+
+Do not remove browser or accessibility focus indicators without providing an appropriate replacement.
+
+## 12. Accessibility
+
+Styling must not compromise accessibility.
+
+Requirements:
+
+- Maintain sufficient text and UI contrast.
+- Preserve visible keyboard focus.
+- Do not communicate important information through color alone.
+- Respect reduced-motion preferences.
+- Keep interactive elements visually distinguishable.
+- Avoid unnecessarily small click targets.
+- Ensure text remains readable at different window sizes and scaling levels.
+
+Accessibility is part of component design, not a final cosmetic step.
+
+## 13. Animations and Transitions
+
+Animations must be purposeful and restrained.
+
+Use transitions for meaningful interface feedback, not decoration everywhere.
+
+Requirements:
+
+- Prefer consistent transition durations.
+- Avoid unnecessary animation.
+- Avoid animations that interfere with editing or workspace interactions.
+- Respect `prefers-reduced-motion`.
+- Avoid triggering expensive layout recalculations.
+- Prefer `transform` and `opacity` when suitable.
+
+Do not introduce an animation library unless there is a clear need.
+
+## 14. CSS Quality and Technical Debt
+
+Avoid accumulating styling debt.
+
+Before adding or modifying styles:
+
+1. Inspect the existing component and its styles.
+2. Search for existing tokens and reusable classes.
+3. Check whether a shared UI component already exists.
+4. Understand the existing layout and theme behavior.
+5. Identify the actual source of the styling issue.
+
+After making changes:
+
+1. Remove obsolete declarations.
+2. Remove duplicated rules.
+3. Remove unused classes when safe.
+4. Check for conflicting selectors.
+5. Verify light and dark theme behavior.
+6. Check affected components for regressions.
+7. Verify responsive behavior where relevant.
+
+Do not leave old and new implementations side by side without a reason.
+
+Do not add temporary overrides as permanent fixes.
+
+Do not introduce arbitrary values when an existing token or established convention is appropriate.
+
+## 15. Styling Review
+
+During code review, pay special attention to:
+
+- Duplicated CSS declarations.
+- Duplicated design tokens.
+- Hardcoded colors and spacing.
+- Unnecessary global styles.
+- Excessive selector specificity.
+- Unnecessary `!important`.
+- Inline styles used for static presentation.
+- Unused CSS classes.
+- Conflicting overrides.
+- Inconsistent component states.
+- Theme incompatibilities.
+- Layout regressions.
+- Accessibility regressions.
+
+A visually correct result is not sufficient if its styling implementation creates unnecessary technical debt.
+
+## 16. Styling Dependencies and Tooling
+
+Do not introduce styling dependencies without justification.
+
+Prefer native CSS capabilities whenever they are sufficient.
+
+A CSS linting tool such as Stylelint may be used to enforce project conventions.
+
+If Stylelint is introduced:
+
+- Configure it consistently with CSS Modules.
+- Avoid rules that conflict with the project's architecture.
+- Integrate it into the development workflow.
+- Fix existing violations instead of disabling rules broadly.
+- Do not add unnecessary linting plugins.
+
+Do not install styling tools automatically without considering the existing project setup.
+
+## 17. General Styling Philosophy
+
+Always prefer:
+
+- Design tokens over scattered visual values.
+- Semantic variables over hardcoded colors.
+- CSS Modules over uncontrolled global styles.
+- Shared UI components over duplicated implementations.
+- Clear layout rules over arbitrary positioning.
+- Fixing root causes over adding overrides.
+- Consistent themes over component-specific theme logic.
+- Maintainable CSS over quick visual hacks.
+
+The goal is not merely to make the interface look correct today.
+
+The goal is to build a coherent styling system that remains understandable and maintainable as Amethyst grows.

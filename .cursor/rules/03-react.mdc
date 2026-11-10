@@ -240,3 +240,32 @@ Do not introduce a dependency merely because it is popular.
 The frontend should remain a presentation and interaction layer.
 
 Keep business logic in Rust, maintain clear component boundaries and build the interface incrementally as the application grows.
+
+## Styling Architecture
+
+Follow the styling conventions defined in:
+
+`.cursor/rules/07-styling.mdc`
+
+These rules are mandatory for all React frontend development.
+
+Key requirements:
+
+- Use CSS Modules for component-specific styles.
+- Use centralized CSS Variables and semantic design tokens.
+- Keep global CSS limited to genuinely global concerns.
+- Reuse existing design tokens and shared UI components.
+- Do not introduce hardcoded recurring visual values.
+- Avoid duplicated styles, conflicting overrides, and unnecessary `!important`.
+- Do not use inline styles for static visual presentation.
+- Keep components compatible with light and dark themes.
+- Preserve consistent interaction states and accessibility.
+- Fix the root cause of styling issues instead of adding layers of overrides.
+
+Before creating or modifying styles, inspect the existing styling architecture and reuse established conventions.
+
+Do not introduce another styling framework or methodology without explicit architectural approval.
+
+When implementing a new React component, consider its visual responsibilities, reuse opportunities, theme behavior, and interaction states.
+
+Styling changes must not introduce unnecessary coupling between components or create global CSS side effects.

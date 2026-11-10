@@ -1,0 +1,15 @@
+.resizer {
+  flex: none;
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.resizer:hover,
+.resizer:focus-visible {
+  background: var(--color-border);
+}
+
+.resizer:focus-visible {
+  outline: none;
+}

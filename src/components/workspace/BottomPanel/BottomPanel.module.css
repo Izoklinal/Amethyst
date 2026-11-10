@@ -1,0 +1,14 @@
+.panel {
+  flex: none;
+  height: var(--layout-panel-height);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--spacing-3);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.message {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
