@@ -1,0 +1,254 @@
+---
+description: Mandatory data integrity and safety rules for all operations involving user data.
+alwaysApply: true
+---
+
+# Amethyst — Data Integrity Rules
+
+## 1. Fundamental Principle
+
+User data integrity is a fundamental requirement of Amethyst.
+
+Never prioritize implementation simplicity or convenience over the safety of user data.
+
+The application must never silently destroy, overwrite, corrupt or discard user data.
+
+When an operation cannot be completed safely, fail explicitly and preserve the existing data.
+
+## 2. Vault Is the Source of Truth
+
+The user's Obsidian Vault is the authoritative source of all note content and user-managed files.
+
+- Never treat the local application database as the authoritative copy of Vault content.
+- Never require users to migrate their Vault into a proprietary format.
+- Never silently modify the structure of an existing Vault.
+- Never assume that Amethyst is the only application accessing the Vault.
+- Always account for external changes made by Obsidian, other editors or filesystem tools.
+
+The local database may contain indexes, caches, search data and other derived information.
+
+Derived data must be recoverable from the Vault.
+
+## 3. Safe File Writes
+
+All operations that modify user files must be designed to minimize the risk of data loss.
+
+Prefer atomic write operations where supported:
+
+1. Write the new content to a temporary file.
+2. Ensure the write completed successfully.
+3. Replace the original file using an appropriate atomic operation.
+4. Clean up temporary files safely.
+
+Do not truncate or partially overwrite an existing file before the replacement content is ready.
+
+Consider platform-specific filesystem behavior.
+
+Handle failures at every stage.
+
+Do not report a successful save before the operation has actually succeeded.
+
+## 4. Concurrent Modifications
+
+Amethyst must assume that files can change outside the application.
+
+Examples include:
+
+- Obsidian modifying the same note.
+- An external text editor saving a file.
+- Git operations changing files.
+- Cloud synchronization tools updating files.
+- Filesystem operations performed by the user.
+
+Before overwriting a file, account for the possibility that its contents have changed since they were read.
+
+Do not blindly overwrite newer external changes with stale in-memory content.
+
+When a concurrent modification is detected:
+
+- Preserve both versions.
+- Avoid destructive automatic resolution.
+- Notify the user when intervention is necessary.
+- Provide a safe way to compare and resolve the changes.
+
+Use filesystem watchers as a notification mechanism, not as the only source of truth.
+
+## 5. Unknown and Unsupported Data
+
+Preserve information that Amethyst does not understand.
+
+This applies particularly to:
+
+- Unknown YAML frontmatter properties.
+- Unsupported property types.
+- Unrecognized Markdown syntax.
+- Obsidian-specific extensions.
+- Unknown metadata fields.
+- Files created by third-party plugins.
+
+Never remove unknown properties merely because the current application does not support editing them.
+
+When modifying part of a document, preserve unrelated content and metadata.
+
+Do not normalize or reformat an entire document unnecessarily.
+
+## 6. Deletion and Destructive Operations
+
+Never silently delete user data.
+
+For destructive operations:
+
+- Make the consequences clear.
+- Require explicit user confirmation when appropriate.
+- Prefer recoverable deletion over permanent deletion.
+- Preserve enough information to restore accidentally deleted content.
+
+Avoid recursive deletion unless the target and consequences have been verified.
+
+Do not follow symbolic links blindly when performing destructive filesystem operations.
+
+Validate paths and ensure operations remain within their intended scope.
+
+## 7. Recovery and Version History
+
+The MVP must include a mechanism for recovering from accidental or failed modifications.
+
+At minimum, design file operations so that previous content can be preserved before risky changes.
+
+Recovery mechanisms must:
+
+- Preserve previous versions safely.
+- Avoid overwriting the only recoverable copy.
+- Clearly identify the original file and its versions.
+- Allow users to restore a previous version deliberately.
+- Handle interrupted operations.
+
+The exact storage format and retention policy should be defined in the architecture and implementation plan.
+
+Do not silently remove recovery data while it may still be needed.
+
+## 8. Git Sync Safety
+
+Git synchronization is a particularly sensitive operation because it can modify many files at once.
+
+Never assume that a successful Git command means the user's data is safe.
+
+Before synchronization:
+
+- Detect relevant local changes.
+- Account for incoming remote changes.
+- Avoid overwriting uncommitted user work.
+- Preserve information needed for conflict recovery.
+
+### Conflict Handling
+
+When a local and remote version conflict:
+
+- Keep the current local version active.
+- Preserve the incoming remote version separately.
+- Notify the user.
+- Never silently discard either version.
+
+Conflict resolution must be explicit.
+
+The user must be able to compare versions and choose how to resolve the conflict.
+
+Do not delete an unselected version until the resolution has been completed safely and the user no longer needs it for recovery.
+
+### Sync Isolation
+
+Temporary conflict and recovery files must not accidentally enter an infinite synchronization cycle.
+
+Exclude internal synchronization artifacts from normal synchronization when appropriate.
+
+Do not exclude legitimate user files or directories without explicit and documented rules.
+
+## 9. Database Integrity
+
+The local application database contains derived information.
+
+- Use transactions for logically related database changes.
+- Handle interrupted indexing and database updates.
+- Avoid leaving partially updated indexes in an inconsistent state.
+- Make indexing operations recoverable.
+- Support rebuilding derived data from the Vault.
+
+Database corruption must not result in loss of original Vault content.
+
+Do not store the only copy of user-authored content in the local database.
+
+## 10. Path and Filesystem Safety
+
+Validate paths before performing filesystem operations.
+
+Account for:
+
+- Relative and absolute paths.
+- Path traversal.
+- Symbolic links.
+- Case sensitivity differences.
+- Windows and Linux filesystem differences.
+- Files disappearing between inspection and operation.
+- Permission errors.
+- Invalid filenames.
+- Unicode filenames.
+
+Do not assume filesystem operations are infallible.
+
+Avoid race conditions between path validation and file operations.
+
+## 11. Error Handling and Logging
+
+Every potentially destructive operation must have explicit error handling.
+
+Errors should:
+
+- Explain what operation failed.
+- Preserve the original data whenever possible.
+- Provide enough context for debugging.
+- Avoid exposing sensitive file contents or credentials.
+
+Never log Git credentials, access tokens or other secrets.
+
+Avoid logging complete note contents unless explicitly required for a safe and justified debugging workflow.
+
+Do not silently swallow filesystem, database or synchronization errors.
+
+## 12. Testing Requirements
+
+Data integrity is a high-priority testing area.
+
+Test at least:
+
+- Interrupted file writes.
+- Failed file replacement.
+- External file modifications.
+- Concurrent modifications.
+- Unknown frontmatter preservation.
+- Unicode and unusual filenames.
+- Permission errors.
+- File deletion and recovery.
+- Database transaction failures.
+- Interrupted indexing.
+- Git conflicts.
+- Failed synchronization.
+- Recovery after application interruption.
+
+Tests involving filesystem operations should use isolated temporary directories.
+
+Never run destructive tests against a real user Vault.
+
+## 13. Implementation Rule
+
+Before implementing any operation that modifies, moves, renames or deletes user data:
+
+1. Identify which files or records may be affected.
+2. Identify possible failure points.
+3. Determine how existing data will be preserved.
+4. Determine how the operation can be recovered.
+5. Add appropriate tests.
+6. Verify that failure cannot silently destroy user data.
+
+If the safe behavior is unclear, stop and propose a solution before implementing the operation.
+
+**When in doubt, preserve the data and ask the user.**
