@@ -5,9 +5,10 @@ import styles from "./StatusBar.module.css";
 type StatusBarProps = {
   vaultName: string | null;
   vaultPath: string | null;
+  noteStatus: string;
 };
 
-export function StatusBar({ vaultName, vaultPath }: StatusBarProps) {
+export function StatusBar({ vaultName, vaultPath, noteStatus }: StatusBarProps) {
   const [message, setMessage] = useState("Connecting to Amethyst Core…");
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export function StatusBar({ vaultName, vaultPath }: StatusBarProps) {
   return (
     <footer className={styles.bar}>
       <span>{message}</span>
+      <span>{noteStatus}</span>
       <span title={vaultPath ?? undefined}>{vaultName ?? "No vault"}</span>
     </footer>
   );

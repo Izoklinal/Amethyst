@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
 const STORAGE_KEY = "amethyst-vault";
@@ -32,6 +33,47 @@ export function closeVault(): Promise<void> {
 
 export function listVaultDirectory(relativePath: string): Promise<VaultEntry[]> {
   return invoke<VaultEntry[]>("list_vault_directory", { relativePath });
+}
+
+export function createVaultFile(parent: string, name: string): Promise<void> {
+  return invoke("create_vault_file", { parent, name });
+}
+
+export function createVaultDirectory(parent: string, name: string): Promise<void> {
+  return invoke("create_vault_directory", { parent, name });
+}
+
+export function renameVaultEntry(relativePath: string, newName: string): Promise<void> {
+  return invoke("rename_vault_entry", { relativePath, newName });
+}
+
+export function moveVaultEntry(
+  relativePath: string,
+  destinationDirectory: string,
+): Promise<void> {
+  return invoke("move_vault_entry", { relativePath, destinationDirectory });
+}
+
+export function trashVaultEntry(relativePath: string): Promise<void> {
+  return invoke("trash_vault_entry", { relativePath });
+}
+
+export function readVaultNote(relativePath: string): Promise<string> {
+  return invoke<string>("read_vault_note", { relativePath });
+}
+
+export function writeVaultNote(
+  relativePath: string,
+  original: string,
+  content: string,
+): Promise<void> {
+  return invoke("write_vault_note", { relativePath, original, content });
+}
+
+export function onVaultChanged(handler: () => void): Promise<() => void> {
+  return listen("vault-changed", () => {
+    handler();
+  });
 }
 
 export function readStoredVaultPath(): string | null {

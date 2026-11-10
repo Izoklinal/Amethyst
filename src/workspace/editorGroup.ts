@@ -1,6 +1,7 @@
 export type EditorTab = {
   id: string;
   title: string;
+  path: string;
 };
 
 export type EditorGroup = {
@@ -12,8 +13,25 @@ export type EditorGroup = {
 export function createInitialGroup(): EditorGroup {
   return {
     id: "group-1",
-    tabs: [{ id: "tab-1", title: "Untitled" }],
-    activeTabId: "tab-1",
+    tabs: [],
+    activeTabId: null,
+  };
+}
+
+export function openNoteTab(
+  group: EditorGroup,
+  path: string,
+  title: string,
+  id: string,
+): EditorGroup {
+  const existing = group.tabs.find((tab) => tab.path === path);
+  if (existing) {
+    return { ...group, activeTabId: existing.id };
+  }
+  return {
+    ...group,
+    tabs: [...group.tabs, { id, title, path }],
+    activeTabId: id,
   };
 }
 

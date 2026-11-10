@@ -1,4 +1,5 @@
 pub mod vault;
+pub mod watch;
 
 /// Name of the application reported by Amethyst Core.
 pub fn application_name() -> &'static str {

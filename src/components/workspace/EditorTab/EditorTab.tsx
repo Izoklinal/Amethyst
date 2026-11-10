@@ -6,14 +6,16 @@ import styles from "./EditorTab.module.css";
 type EditorTabProps = {
   tab: EditorTabModel;
   active: boolean;
+  dirty: boolean;
   onActivate: () => void;
   onClose: () => void;
 };
 
-export function EditorTab({ tab, active, onActivate, onClose }: EditorTabProps) {
+export function EditorTab({ tab, active, dirty, onActivate, onClose }: EditorTabProps) {
   return (
     <div className={active ? styles.active : styles.tab}>
       <button type="button" className={styles.label} onClick={onActivate}>
+        {dirty ? <span className={styles.dirty} aria-hidden="true" /> : null}
         {tab.title}
       </button>
       <IconButton

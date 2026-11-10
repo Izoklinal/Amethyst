@@ -26,6 +26,12 @@ export type CommandActions = {
   openPalette: () => void;
   openVault: () => void;
   closeVault: () => void;
+  newNote: () => void;
+  newFolder: () => void;
+  renameEntry: () => void;
+  moveEntry: () => void;
+  deleteEntry: () => void;
+  saveNote: () => void;
 };
 
 export function shortcutLabel(shortcut: Shortcut): string {
@@ -83,6 +89,37 @@ export function createCommands(actions: CommandActions): Command[] {
       id: "vault.close",
       title: "Close Vault",
       run: actions.closeVault,
+    },
+    {
+      id: "explorer.newNote",
+      title: "New Note",
+      run: actions.newNote,
+    },
+    {
+      id: "explorer.newFolder",
+      title: "New Folder",
+      run: actions.newFolder,
+    },
+    {
+      id: "explorer.rename",
+      title: "Rename",
+      run: actions.renameEntry,
+    },
+    {
+      id: "explorer.move",
+      title: "Move",
+      run: actions.moveEntry,
+    },
+    {
+      id: "explorer.delete",
+      title: "Delete",
+      run: actions.deleteEntry,
+    },
+    {
+      id: "note.save",
+      title: "Save Note",
+      shortcut: { code: "KeyS", ctrl: true, shift: false, alt: false },
+      run: actions.saveNote,
     },
     {
       id: "sidebar.primary.toggle",

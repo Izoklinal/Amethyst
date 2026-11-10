@@ -8,7 +8,7 @@
   background: var(--color-background);
 }
 
+.area:focus,
 .area:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
+  outline: none;
 }

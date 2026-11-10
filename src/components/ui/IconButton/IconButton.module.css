@@ -13,8 +13,14 @@
   cursor: pointer;
 }
 
-.button:hover {
+.button:hover:not(:disabled) {
   border-color: var(--color-border);
+}
+
+.button:disabled,
+.active:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
 .button:focus-visible,

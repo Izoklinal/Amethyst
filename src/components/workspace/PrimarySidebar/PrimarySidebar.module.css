@@ -9,10 +9,22 @@
   border-right: 1px solid var(--color-border);
 }
 
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
+}
+
 .title {
   margin: 0 0 var(--spacing-2);
   font-size: var(--font-size-label);
   font-weight: 600;
+}
+
+.heading .title {
+  margin: 0;
 }
 
 .message {
@@ -36,6 +48,97 @@
 }
 
 .open:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.tool {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-medium);
+  color: var(--color-text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tool:hover:not(:disabled),
+.tool:focus-visible {
+  color: var(--color-text-primary);
+  background: var(--color-surface-selected);
+}
+
+.tool:focus-visible {
+  outline: none;
+}
+
+.tool:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.tool::after {
+  content: attr(data-label);
+  position: absolute;
+  top: calc(100% + var(--spacing-1));
+  left: 50%;
+  z-index: var(--z-overlay);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-medium);
+  color: var(--color-background);
+  background: var(--color-text-primary);
+  font-size: var(--font-size-label);
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 120ms;
+  transition-delay: 400ms;
+}
+
+.tool:hover::after,
+.tool:focus-visible::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool::after {
+    transition: none;
+  }
+}
+
+.form {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  margin-bottom: var(--spacing-3);
+}
+
+.field {
+  flex: 1;
+  min-width: 0;
+  padding: var(--spacing-1) var(--spacing-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-background);
+}
+
+.field:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }

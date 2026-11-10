@@ -4,6 +4,7 @@ import {
   vaultErrorMessage,
   type VaultEntry,
 } from "../../../api/vault";
+import type { SelectedEntry } from "../PrimarySidebar/explorerActions";
 import styles from "./VaultTree.module.css";
 
 type NodeState = {
@@ -15,6 +16,10 @@ type NodeState = {
 
 type VaultTreeProps = {
   vaultPath: string;
+  refreshToken: number;
+  selectedPath: string | null;
+  onSelect: (entry: SelectedEntry) => void;
+  onOpen: (entry: SelectedEntry) => void;
 };
 
 type EntryListProps = {
@@ -22,7 +27,10 @@ type EntryListProps = {
   parent: string;
   depth: number;
   nodes: Record<string, NodeState>;
+  selectedPath: string | null;
   onToggle: (path: string) => void;
+  onSelect: (entry: SelectedEntry) => void;
+  onOpen: (entry: SelectedEntry) => void;
 };
 
 function depthStyle(depth: number): CSSProperties {
@@ -33,17 +41,37 @@ function childPath(parent: string, name: string): string {
   return parent.length === 0 ? name : `${parent}/${name}`;
 }
 
-function EntryList({ entries, parent, depth, nodes, onToggle }: EntryListProps) {
+function EntryList({
+  entries,
+  parent,
+  depth,
+  nodes,
+  selectedPath,
+  onToggle,
+  onSelect,
+  onOpen,
+}: EntryListProps) {
   return (
     <ul className={styles.tree}>
       {entries.map((entry) => {
         const path = childPath(parent, entry.name);
+        const selected = path === selectedPath;
         if (entry.kind === "file") {
           return (
             <li key={path}>
-              <div className={styles.file} style={depthStyle(depth)}>
+              <button
+                type="button"
+                className={selected ? `${styles.file} ${styles.selected}` : styles.file}
+                style={depthStyle(depth)}
+                aria-current={selected ? "true" : undefined}
+                onClick={() => {
+                  const chosen = { path, name: entry.name, kind: entry.kind };
+                  onSelect(chosen);
+                  onOpen(chosen);
+                }}
+              >
                 {entry.name}
-              </div>
+              </button>
             </li>
           );
         }
@@ -54,10 +82,16 @@ function EntryList({ entries, parent, depth, nodes, onToggle }: EntryListProps) 
           <li key={path}>
             <button
               type="button"
-              className={styles.directory}
+              className={
+                selected ? `${styles.directory} ${styles.selected}` : styles.directory
+              }
               style={depthStyle(depth)}
               aria-expanded={open}
-              onClick={() => onToggle(path)}
+              aria-current={selected ? "true" : undefined}
+              onClick={() => {
+                onSelect({ path, name: entry.name, kind: entry.kind });
+                onToggle(path);
+              }}
             >
               {entry.name}
             </button>
@@ -82,7 +116,10 @@ function EntryList({ entries, parent, depth, nodes, onToggle }: EntryListProps) 
                 parent={path}
                 depth={depth + 1}
                 nodes={nodes}
+                selectedPath={selectedPath}
                 onToggle={onToggle}
+                onSelect={onSelect}
+                onOpen={onOpen}
               />
             ) : null}
           </li>
@@ -92,7 +129,13 @@ function EntryList({ entries, parent, depth, nodes, onToggle }: EntryListProps) 
   );
 }
 
-export function VaultTree({ vaultPath }: VaultTreeProps) {
+export function VaultTree({
+  vaultPath,
+  refreshToken,
+  selectedPath,
+  onSelect,
+  onOpen,
+}: VaultTreeProps) {
   const [root, setRoot] = useState<NodeState>({
     open: true,
     status: "loading",
@@ -105,6 +148,7 @@ export function VaultTree({ vaultPath }: VaultTreeProps) {
 
   useEffect(() => {
     let cancelled = false;
+
     listVaultDirectory("")
       .then((entries) => {
         if (!cancelled) {
@@ -121,10 +165,52 @@ export function VaultTree({ vaultPath }: VaultTreeProps) {
           }));
         }
       });
+
+    const openPaths = Object.entries(nodesRef.current)
+      .filter(([, node]) => node.open)
+      .map(([path]) => path);
+    for (const path of openPaths) {
+      listVaultDirectory(path)
+        .then((entries) => {
+          if (cancelled) {
+            return;
+          }
+          setNodes((state) => {
+            const current = state[path];
+            if (!current?.open) {
+              return state;
+            }
+            return {
+              ...state,
+              [path]: { ...current, status: "ready", entries, error: null },
+            };
+          });
+        })
+        .catch((error: unknown) => {
+          if (cancelled) {
+            return;
+          }
+          setNodes((state) => {
+            const current = state[path];
+            if (!current) {
+              return state;
+            }
+            return {
+              ...state,
+              [path]: {
+                ...current,
+                status: "error",
+                error: vaultErrorMessage(error),
+              },
+            };
+          });
+        });
+    }
+
     return () => {
       cancelled = true;
     };
-  }, [vaultPath]);
+  }, [vaultPath, refreshToken]);
 
   function toggle(path: string) {
     const current = nodesRef.current[path];
@@ -189,7 +275,10 @@ export function VaultTree({ vaultPath }: VaultTreeProps) {
           parent=""
           depth={0}
           nodes={nodes}
+          selectedPath={selectedPath}
           onToggle={toggle}
+          onSelect={onSelect}
+          onOpen={onOpen}
         />
       ) : null}
       {root.status === "ready" && root.entries.length === 0 ? (

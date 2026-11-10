@@ -6,4 +6,6 @@ edition = "2024"
 publish = false
 
 [dependencies]
+notify = "8.2.2"
+notify-debouncer-mini = "0.7.0"
 serde = { version = "1", features = ["derive"] }
