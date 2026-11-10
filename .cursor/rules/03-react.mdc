@@ -1,0 +1,242 @@
+---
+description: React and TypeScript development standards for the Amethyst frontend.
+globs: "**/*.{ts,tsx,js,jsx}"
+alwaysApply: true
+---
+
+# Amethyst — React Development Rules
+
+## 1. General Principles
+
+Write frontend code that is:
+
+- Component-oriented.
+- Strongly typed.
+- Maintainable.
+- Accessible.
+- Performant.
+- Consistent with the application architecture.
+
+Use React and TypeScript idiomatically.
+
+Prefer simple, reusable components with clear responsibilities.
+
+Avoid unnecessary abstractions and premature generalization.
+
+## 2. Frontend Responsibilities
+
+React is responsible for:
+
+- Rendering the application interface.
+- Handling user interactions.
+- Workspace presentation.
+- UI-specific state.
+- Navigation and panel management.
+- Displaying data received from the Rust backend.
+- Sending user actions to the backend.
+
+React must not become the source of truth for domain data.
+
+Business logic involving Vault files, Markdown processing, indexing, Git synchronization and other Core responsibilities belongs in Rust.
+
+Do not duplicate backend business rules in TypeScript.
+
+## 3. TypeScript
+
+Use TypeScript throughout the frontend.
+
+- Prefer explicit types for public interfaces.
+- Avoid `any`.
+- Avoid unnecessary type assertions.
+- Use discriminated unions where appropriate.
+- Represent optional and nullable values explicitly.
+- Keep frontend/backend data contracts consistent.
+
+Do not suppress TypeScript errors merely to make code compile.
+
+When a type is shared conceptually between Rust and TypeScript, ensure both sides agree on its structure and semantics.
+
+## 4. Component Design
+
+Components should have clear and focused responsibilities.
+
+Prefer composition over large components containing unrelated functionality.
+
+Separate:
+
+- Presentation components.
+- Feature-specific components.
+- Workspace components.
+- Shared UI components.
+- Application-level composition.
+
+Avoid excessively large components.
+
+Extract reusable logic into custom hooks when doing so improves clarity.
+
+Do not create abstractions solely to avoid a small amount of duplicated code.
+
+## 5. State Management
+
+Keep state as close as practical to the components that use it.
+
+Distinguish between:
+
+- Local component state.
+- Shared UI state.
+- Workspace state.
+- Backend-owned domain state.
+- Persistent application settings.
+
+Do not introduce a global state management library without a demonstrated need.
+
+Avoid duplicating backend data in multiple independent frontend stores.
+
+The backend remains authoritative for domain operations and persistent data.
+
+UI state should not silently overwrite newer backend data.
+
+## 6. Backend Communication
+
+Use a centralized and typed communication layer for Tauri commands.
+
+Avoid scattering raw Tauri IPC calls throughout unrelated components.
+
+The communication layer should:
+
+- Provide typed command interfaces.
+- Handle backend responses consistently.
+- Propagate meaningful errors.
+- Avoid duplicating command names and payload definitions.
+- Keep Tauri-specific communication details isolated from presentation components.
+
+Components should interact with application services or hooks rather than directly implementing backend communication.
+
+Do not move business logic into the communication layer.
+
+## 7. Workspace Architecture
+
+The Workspace is a central part of Amethyst's user experience.
+
+Design it with modularity and extensibility in mind.
+
+Workspace components should support clear boundaries between:
+
+- Tabs.
+- Editor groups.
+- Sidebars.
+- Panels.
+- Tool views.
+- Workspace layout state.
+
+Avoid hardcoding every built-in tool directly into one large component.
+
+At the same time, do not implement a complete plugin architecture before it is required.
+
+Keep future extensibility in mind without prematurely building it.
+
+## 8. Styling and UI Consistency
+
+Use a consistent design system.
+
+- Reuse shared design tokens.
+- Maintain consistent spacing and typography.
+- Keep component styling predictable.
+- Support light and dark themes.
+- Avoid scattered hardcoded colors and dimensions.
+- Ensure interactive elements have clear visual states.
+
+Do not introduce multiple competing styling systems.
+
+The choice of a specific styling library should be made separately and consistently across the project.
+
+## 9. Performance
+
+Avoid unnecessary component re-renders.
+
+Use memoization when there is a measurable or clear benefit.
+
+Avoid expensive computations during rendering.
+
+Keep large collections and lists efficient.
+
+Do not load or process entire Vault contents in the frontend.
+
+Large datasets should be handled through appropriate backend operations and incremental data delivery.
+
+Do not introduce complicated performance optimizations without evidence that they are needed.
+
+## 10. User Interaction
+
+Provide clear feedback for asynchronous operations.
+
+- Show loading states where appropriate.
+- Display meaningful error messages.
+- Prevent accidental duplicate actions where necessary.
+- Handle unavailable backend operations gracefully.
+- Avoid blocking the entire interface during unrelated operations.
+
+Keyboard navigation and shortcuts are important parts of the Amethyst experience.
+
+Interactive components should be accessible and support appropriate keyboard behavior.
+
+## 11. Editor Integration
+
+The Markdown editor is a major application feature.
+
+Keep the editor implementation isolated behind clear interfaces.
+
+Avoid coupling unrelated Workspace components to the internal implementation of the editor engine.
+
+Editor-specific state should be managed deliberately.
+
+The frontend must preserve the backend's authority over file persistence and external file changes.
+
+Do not implement Markdown serialization or file-writing logic independently in React.
+
+## 12. Error Handling
+
+Handle failed backend operations explicitly.
+
+Do not silently ignore rejected promises.
+
+Provide useful feedback to the user without exposing sensitive internal information.
+
+Avoid generic error handling that hides the underlying cause.
+
+## 13. Testing
+
+Write tests for meaningful frontend behavior.
+
+Prioritize:
+
+- Component behavior.
+- User interactions.
+- State transitions.
+- Workspace behavior.
+- Backend communication.
+- Error and loading states.
+- Keyboard navigation.
+
+Use integration tests when several components work together.
+
+Do not test only implementation details.
+
+## 14. Dependencies
+
+Before adding a frontend dependency:
+
+1. Check whether React or the existing project utilities already provide the functionality.
+2. Evaluate maintenance and ecosystem maturity.
+3. Consider bundle size and runtime performance.
+4. Check accessibility.
+5. Consider compatibility with Tauri.
+6. Avoid overlapping libraries.
+
+Do not introduce a dependency merely because it is popular.
+
+## 15. General Rule
+
+The frontend should remain a presentation and interaction layer.
+
+Keep business logic in Rust, maintain clear component boundaries and build the interface incrementally as the application grows.
