@@ -1,0 +1,120 @@
+---
+description: Core project context and product principles for Amethyst. Apply to all project work.
+alwaysApply: true
+---
+
+# Amethyst — Project Context
+
+## What Is Amethyst?
+
+Amethyst is a local-first, cross-platform knowledge management and note-taking application.
+
+It combines:
+- The note-taking and knowledge management philosophy of Obsidian.
+- The flexible Workspace experience of Visual Studio Code.
+- A performance-oriented native application architecture.
+
+Amethyst is intended to provide a fast, flexible and extensible environment for managing personal knowledge.
+
+## Technology Stack
+
+- **Rust:** application core and business logic.
+- **Tauri 2:** native application framework and communication layer.
+- **React:** frontend framework.
+- **TypeScript:** frontend language.
+
+Do not introduce alternative primary technologies without explicit architectural justification.
+
+## Product Principles
+
+### Performance First
+The application should remain responsive when working with large Vaults.
+
+Avoid unnecessary filesystem operations, expensive computations and excessive memory usage.
+
+### Local First
+Core functionality must work locally without requiring a proprietary cloud service.
+
+### Data Ownership
+The user's Vault remains the source of truth.
+
+Amethyst must not require migration to a proprietary storage format.
+
+### Obsidian Compatibility
+Amethyst must work directly with existing Obsidian Vaults.
+
+Preserve original Markdown, YAML frontmatter, Canvas and attachment formats whenever they are supported.
+
+### Keyboard First
+Keyboard navigation and shortcuts are important parts of the user experience.
+
+### Customization
+The Workspace should become highly customizable without compromising usability or performance.
+
+### Modularity
+Application components should have clear responsibilities and interfaces.
+
+### Data Safety
+Never silently discard, overwrite or corrupt user data.
+
+## MVP Scope
+
+The initial release targets Windows and Linux.
+
+The MVP includes:
+
+- Existing Obsidian Vault support.
+- Markdown Live Preview and Reading Mode.
+- Internal links and backlinks.
+- File explorer.
+- Search and indexing.
+- Properties with visual editors.
+- Basic tabbed Workspace.
+- Attachments.
+- Daily Notes.
+- Basic Templates.
+- Built-in Git Sync.
+- Basic settings and customization.
+- Local version recovery and data integrity protections.
+
+## Explicitly Outside MVP Scope
+
+Do not implement these features unless explicitly requested:
+
+- Android application.
+- Third-party plugin system.
+- Advanced Graph functionality.
+- Canvas editor.
+- Full Calendar interface.
+- Bases.
+- Analytics dashboards.
+- Advanced task management.
+- Advanced template scripting.
+- Fully customizable Workspace layouts.
+
+## Product Development Philosophy
+
+Amethyst should be developed incrementally.
+
+Prioritize:
+1. Correctness.
+2. Data integrity.
+3. Performance.
+4. Maintainability.
+5. User experience.
+6. Extensibility.
+
+Do not sacrifice reliability or architectural clarity to implement features faster.
+
+## Documentation Authority
+
+Use the following documents as the primary source of project requirements:
+
+- `docs/PRODUCT.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DECISIONS.md`
+- `docs/ROADMAP.md`
+
+If an implementation idea contradicts these documents, identify the conflict before proceeding.
+
+Do not invent product requirements or assume that future roadmap features belong in the current implementation scope.
