@@ -1,7 +1,9 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use amethyst_core::vault::{DirectoryEntry, Vault, VaultError, VaultInfo};
+use amethyst_core::links::{backlinks_to, resolve_editor_link, Backlink, OpenNote, ResolvedLink};
+use amethyst_core::outline::{outline_of, Heading};
+use amethyst_core::vault::{DirectoryEntry, NoteMatch, Vault, VaultError, VaultInfo};
 use amethyst_core::watch::VaultWatcher;
 use tauri::{AppHandle, Emitter, State};
 
@@ -129,6 +131,39 @@ fn trash_vault_entry(session: State<VaultSession>, relative_path: String) -> Res
 }
 
 #[tauri::command]
+fn list_vault_notes(session: State<VaultSession>) -> Result<Vec<NoteMatch>, String> {
+    with_vault(&session, |vault| vault.list_markdown_notes())
+}
+
+#[tauri::command]
+fn note_outline(text: String) -> Vec<Heading> {
+    outline_of(&text)
+}
+
+#[tauri::command]
+fn vault_backlinks(
+    session: State<VaultSession>,
+    target: String,
+    open_notes: Vec<OpenNote>,
+) -> Result<Vec<Backlink>, String> {
+    let guard = lock_session(&session)?;
+    let vault = guard.vault.as_ref().ok_or("No vault is open")?;
+    backlinks_to(vault, &target, &open_notes).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn resolve_vault_wikilink(
+    session: State<VaultSession>,
+    source: String,
+    text: String,
+    offset: usize,
+) -> Result<ResolvedLink, String> {
+    let guard = lock_session(&session)?;
+    let vault = guard.vault.as_ref().ok_or("No vault is open")?;
+    resolve_editor_link(vault, &source, &text, offset).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn read_vault_note(session: State<VaultSession>, relative_path: String) -> Result<String, String> {
     with_vault(&session, |vault| vault.read_note(&relative_path))
 }
@@ -165,6 +200,10 @@ pub fn run() {
             rename_vault_entry,
             move_vault_entry,
             trash_vault_entry,
+            list_vault_notes,
+            note_outline,
+            vault_backlinks,
+            resolve_vault_wikilink,
             read_vault_note,
             write_vault_note
         ])

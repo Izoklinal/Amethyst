@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   readVaultNote,
   vaultErrorMessage,
@@ -11,6 +11,7 @@ import {
   openNoteTab,
   type EditorGroup,
 } from "../../../workspace/editorGroup";
+import { recordNoteOpen } from "../../../workspace/noteOpens";
 import type { SelectedEntry } from "../PrimarySidebar/explorerActions";
 
 type NoteBuffer = {
@@ -86,6 +87,9 @@ export function useOpenNotes(
     }
     const existing = groupRef.current.tabs.find((tab) => tab.path === entry.path);
     if (existing) {
+      if (vaultPath) {
+        recordNoteOpen(vaultPath, entry.path);
+      }
       setGroup((current) => activateTab(current, existing.id));
       setOpenError(null);
       return;
@@ -93,6 +97,9 @@ export function useOpenNotes(
     const id = crypto.randomUUID();
     void readVaultNote(entry.path)
       .then((text) => {
+        if (vaultPath) {
+          recordNoteOpen(vaultPath, entry.path);
+        }
         setOpenError(null);
         setGroup((current) => openNoteTab(current, entry.path, entry.name, id));
         setBuffers((current) => {
@@ -108,7 +115,7 @@ export function useOpenNotes(
       .catch((cause: unknown) => {
         setOpenError(vaultErrorMessage(cause));
       });
-  }, []);
+  }, [vaultPath]);
 
   const edit = useCallback((tabId: string, text: string) => {
     setBuffers((current) => {
@@ -216,6 +223,15 @@ export function useOpenNotes(
     }
   }, [save]);
 
+  const openNoteTexts = useMemo(
+    () =>
+      group.tabs.flatMap((tab) => {
+        const buffer = buffers[tab.id];
+        return buffer ? [{ path: buffer.path, text: buffer.text }] : [];
+      }),
+    [buffers, group.tabs],
+  );
+
   const active = group.tabs.find((tab) => tab.id === group.activeTabId) ?? null;
   const activeBuffer = active ? buffers[active.id] : undefined;
   const pendingTab = group.tabs.find((tab) => tab.id === pendingCloseId) ?? null;
@@ -243,6 +259,7 @@ export function useOpenNotes(
     group,
     setGroup,
     activeBuffer,
+    openNoteTexts,
     dirtyTabIds,
     pendingTab,
     noteStatus,

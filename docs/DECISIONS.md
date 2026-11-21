@@ -189,6 +189,29 @@ Built-in tools should be represented as independent workspace components.
 
 ---
 
+## ADR-010: CodeMirror 6 as the Note Editor
+
+**Status:** Accepted
+
+**Decision:**
+
+The note editor is CodeMirror 6. Its document is the Markdown string stored in the vault file, not a separate block tree.
+
+**Rationale:**
+
+- The original Markdown remains the text that is saved.
+- Unsupported syntax stays in the document instead of being rewritten into another model.
+- Headings, emphasis, links and later editor behavior can be added as editor extensions.
+- Cursor positions match the UTF-16 offsets already used by outline and wikilink commands.
+
+**Consequences:**
+
+- Live preview hides or styles ranges. It does not change the saved text.
+- Editor commands talk to the CodeMirror document rather than a textarea.
+- A block-model editor such as TipTap is not the note editor.
+
+---
+
 ## Future Decisions
 
 Additional decisions should be recorded here when they have meaningful long-term architectural consequences.

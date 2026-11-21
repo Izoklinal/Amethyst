@@ -1,3 +1,5 @@
+pub mod links;
+pub mod outline;
 pub mod vault;
 pub mod watch;
 

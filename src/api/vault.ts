@@ -31,6 +31,15 @@ export function closeVault(): Promise<void> {
   return invoke("close_vault");
 }
 
+export type NoteMatch = {
+  path: string;
+  name: string;
+};
+
+export function listVaultNotes(): Promise<NoteMatch[]> {
+  return invoke<NoteMatch[]>("list_vault_notes");
+}
+
 export function listVaultDirectory(relativePath: string): Promise<VaultEntry[]> {
   return invoke<VaultEntry[]>("list_vault_directory", { relativePath });
 }
@@ -56,6 +65,46 @@ export function moveVaultEntry(
 
 export function trashVaultEntry(relativePath: string): Promise<void> {
   return invoke("trash_vault_entry", { relativePath });
+}
+
+export type ResolvedLink = {
+  path: string;
+  heading: string | null;
+};
+
+export function resolveVaultWikilink(
+  source: string,
+  text: string,
+  offset: number,
+): Promise<ResolvedLink> {
+  return invoke<ResolvedLink>("resolve_vault_wikilink", { source, text, offset });
+}
+
+export type Backlink = {
+  path: string;
+  name: string;
+};
+
+export type OpenNoteText = {
+  path: string;
+  text: string;
+};
+
+export type Heading = {
+  level: number;
+  text: string;
+  offset: number;
+};
+
+export function noteOutline(text: string): Promise<Heading[]> {
+  return invoke<Heading[]>("note_outline", { text });
+}
+
+export function vaultBacklinks(
+  target: string,
+  openNotes: OpenNoteText[],
+): Promise<Backlink[]> {
+  return invoke<Backlink[]>("vault_backlinks", { target, openNotes });
 }
 
 export function readVaultNote(relativePath: string): Promise<string> {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createVaultDirectory,
   createVaultFile,
@@ -47,7 +47,12 @@ function targetDirectory(selection: SelectedEntry | null): string {
 }
 
 export function useExplorerActions(vaultPath: string | null, onRefresh: () => void) {
-  const [selection, setSelection] = useState<SelectedEntry | null>(null);
+  const [selection, setSelectionState] = useState<SelectedEntry | null>(null);
+  const selectionRef = useRef<SelectedEntry | null>(null);
+  const setSelection = useCallback((entry: SelectedEntry | null) => {
+    selectionRef.current = entry;
+    setSelectionState(entry);
+  }, []);
   const [form, setForm] = useState<ExplorerForm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,7 +61,7 @@ export function useExplorerActions(vaultPath: string | null, onRefresh: () => vo
     setSelection(null);
     setForm(null);
     setError(null);
-  }, [vaultPath]);
+  }, [setSelection, vaultPath]);
 
   const openForm = useCallback((action: ExplorerFormAction, value: string) => {
     setError(null);
@@ -71,16 +76,19 @@ export function useExplorerActions(vaultPath: string | null, onRefresh: () => vo
     return false;
   }, [vaultPath]);
 
+  const getSelection = useCallback(() => selectionRef.current, []);
+
   const requireSelection = useCallback((): SelectedEntry | null => {
     if (!requireVault()) {
       return null;
     }
-    if (!selection) {
+    const current = selectionRef.current;
+    if (!current) {
       setError("Select a file or folder.");
       return null;
     }
-    return selection;
-  }, [requireVault, selection]);
+    return current;
+  }, [requireVault]);
 
   const newNote = useCallback(() => {
     if (requireVault()) {
@@ -148,7 +156,7 @@ export function useExplorerActions(vaultPath: string | null, onRefresh: () => vo
       return;
     }
     const value = form.value;
-    const current = selection;
+    const current = selectionRef.current;
     setBusy(true);
     setError(null);
 
@@ -189,11 +197,12 @@ export function useExplorerActions(vaultPath: string | null, onRefresh: () => vo
       .finally(() => {
         setBusy(false);
       });
-  }, [busy, form, onRefresh, selection, vaultPath]);
+  }, [busy, form, onRefresh, vaultPath]);
 
   return {
     selection,
     setSelection,
+    getSelection,
     form,
     error,
     busy,

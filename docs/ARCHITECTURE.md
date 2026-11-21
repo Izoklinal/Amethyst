@@ -301,7 +301,7 @@ The editor must preserve the original Markdown format.
 
 The editor should be integrated into the Workspace system rather than tightly coupled to a single application window or layout.
 
-The exact editor engine and supporting libraries are TBD.
+The note editor engine is CodeMirror 6. Its document is the original Markdown string.
 
 ---
 

@@ -7,6 +7,8 @@
   --radius-medium: 8px;
   --font-size-label: 0.85rem;
   --z-overlay: 10;
+  --z-menu: 20;
+  --z-tooltip: 30;
   --layout-activity-bar-width: 48px;
   --layout-sidebar-width: 220px;
   --layout-context-sidebar-width: 240px;

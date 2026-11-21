@@ -1,0 +1,17 @@
+.name,
+.path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name {
+  flex: 1;
+}
+
+.path {
+  flex: 1.4;
+  text-align: right;
+  color: var(--color-text-secondary);
+}

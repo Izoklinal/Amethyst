@@ -2,7 +2,6 @@
   position: fixed;
   inset: 0;
   z-index: var(--z-overlay);
-  background: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
 }
 
 .dialog {
@@ -23,6 +22,7 @@
   font: inherit;
   color: var(--color-text-primary);
   background: transparent;
+  user-select: text;
 }
 
 .input:focus-visible {

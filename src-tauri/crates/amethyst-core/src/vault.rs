@@ -28,6 +28,14 @@ pub struct DirectoryEntry {
     pub kind: EntryKind,
 }
 
+/// A Markdown note selected by part of its name or path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteMatch {
+    pub path: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EntryKind {
@@ -128,6 +136,38 @@ impl Vault {
 
         entries.sort_by(compare_entries);
         Ok(entries)
+    }
+
+    /// Every Markdown note except those in `.trash`. Does not read file contents.
+    pub fn list_markdown_notes(&self) -> Result<Vec<NoteMatch>, VaultError> {
+        let mut found = Vec::new();
+        self.collect_notes("", &mut found)?;
+        found.sort_by_key(|note| note.path.to_lowercase());
+        Ok(found)
+    }
+
+    fn collect_notes(&self, directory: &str, found: &mut Vec<NoteMatch>) -> Result<(), VaultError> {
+        for entry in self.list(directory)? {
+            if entry.kind == EntryKind::Directory && entry.name == TRASH_DIRECTORY {
+                continue;
+            }
+            let path = if directory.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{directory}/{}", entry.name)
+            };
+            match entry.kind {
+                EntryKind::Directory => self.collect_notes(&path, found)?,
+                EntryKind::File if is_markdown_name(&entry.name) => {
+                    found.push(NoteMatch {
+                        name: entry.name,
+                        path,
+                    });
+                }
+                EntryKind::File => {}
+            }
+        }
+        Ok(())
     }
 
     /// Creates an empty file. A name without an extension becomes a Markdown file.
@@ -886,6 +926,44 @@ mod tests {
             [0xff, 0xfe]
         );
         assert_eq!(vault.read_note(".."), Err(VaultError::OutsideVault));
+    }
+
+    #[test]
+    fn list_markdown_notes_returns_every_note_except_trash() {
+        let workspace = TempWorkspace::new();
+        let root = &workspace.path;
+        fs::create_dir_all(root.join("Notes")).expect("notes");
+        fs::create_dir_all(root.join(".trash")).expect("trash");
+        fs::write(root.join("Notes").join("Alpha.md"), "a").expect("alpha");
+        fs::write(root.join("Notes").join("Alpine.md"), "b").expect("alpine");
+        fs::write(root.join("Beta.md"), "c").expect("beta");
+        fs::write(root.join("Заметка.md"), "d").expect("cyrillic");
+        fs::write(root.join(".trash").join("Alpha.md"), "gone").expect("trashed");
+        fs::write(root.join("pic.png"), "image").expect("image");
+        let before = fs::read_dir(root).expect("read").count();
+        let vault = Vault::open(root).expect("open");
+
+        let mut paths: Vec<_> = vault
+            .list_markdown_notes()
+            .expect("list")
+            .into_iter()
+            .map(|note| note.path)
+            .collect();
+        paths.sort();
+        assert_eq!(
+            paths,
+            vec![
+                "Beta.md".to_string(),
+                "Notes/Alpha.md".to_string(),
+                "Notes/Alpine.md".to_string(),
+                "Заметка.md".to_string(),
+            ]
+        );
+        assert_eq!(fs::read_dir(root).expect("read").count(), before);
+        assert_eq!(
+            fs::read(root.join(".trash").join("Alpha.md")).expect("trash"),
+            b"gone"
+        );
     }
 
     fn make_directory_link(target: &Path, link: &Path) -> io::Result<()> {

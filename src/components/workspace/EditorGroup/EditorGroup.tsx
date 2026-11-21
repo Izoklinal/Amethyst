@@ -1,3 +1,5 @@
+import type { Ref } from "react";
+import { NoteEditor, type NoteEditorHandle } from "../../../editor/NoteEditor";
 import type { EditorGroup as EditorGroupModel } from "../../../workspace/editorGroup";
 import { IconButton } from "../../ui/IconButton/IconButton";
 import { CheckIcon, CloseIcon, DiscardIcon } from "../../ui/icons";
@@ -15,6 +17,8 @@ type EditorGroupProps = {
   onSaveClose: () => void;
   onDiscardClose: () => void;
   onCancelClose: () => void;
+  onOpenMenu: (x: number, y: number) => void;
+  editorRef: Ref<NoteEditorHandle>;
 };
 
 export function EditorGroup({
@@ -28,6 +32,8 @@ export function EditorGroup({
   onSaveClose,
   onDiscardClose,
   onCancelClose,
+  onOpenMenu,
+  editorRef,
 }: EditorGroupProps) {
   return (
     <section className={styles.group} aria-label="Editor group">
@@ -63,14 +69,15 @@ export function EditorGroup({
         {text === null ? (
           <p className={styles.empty}>No note open.</p>
         ) : (
-          <textarea
-            className={styles.editor}
-            value={text}
-            spellCheck={false}
-            aria-label="Note text"
-            data-note-editor="true"
-            onChange={(event) => onChange(event.target.value)}
-          />
+          <div className={styles.editor}>
+            <NoteEditor
+              key={group.activeTabId ?? "note"}
+              ref={editorRef}
+              text={text}
+              onChange={onChange}
+              onContextMenu={onOpenMenu}
+            />
+          </div>
         )}
       </div>
     </section>
