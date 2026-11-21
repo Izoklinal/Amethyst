@@ -40,6 +40,36 @@ test("emphasis marks are hidden while the cursor is outside them", () => {
   ]);
 });
 
+test("a bullet marker is replaced until the cursor is on its line", () => {
+  const doc = "- item\n\nafter";
+  assert.deepEqual(hiddenRanges(previewDecorations(stateFor(doc, doc.length))), [[0, 1]]);
+  assert.deepEqual(hiddenRanges(previewDecorations(stateFor(doc, 2))), []);
+});
+
+test("a quote mark is hidden until the cursor is on its line", () => {
+  const doc = "> said\n\nafter";
+  assert.deepEqual(hiddenRanges(previewDecorations(stateFor(doc, doc.length))), [[0, 1]]);
+  assert.deepEqual(hiddenRanges(previewDecorations(stateFor(doc, 2))), []);
+});
+
+test("inline code marks are hidden while the cursor is outside them", () => {
+  const doc = "say `code` please";
+  const hidden = hiddenRanges(previewDecorations(stateFor(doc, 0)));
+  assert.deepEqual(hidden, [
+    [doc.indexOf("`"), doc.indexOf("`") + 1],
+    [doc.lastIndexOf("`"), doc.lastIndexOf("`") + 1],
+  ]);
+});
+
+test("an ordered list marker stays visible", () => {
+  const doc = "1. item\n\nafter";
+  const hidden = hiddenRanges(previewDecorations(stateFor(doc, doc.length)));
+  assert.equal(
+    hidden.some(([from, to]) => from === 0 && to > 0),
+    false,
+  );
+});
+
 test("a hash inside code is not treated as a heading mark", () => {
   const doc = "```\n# Hidden\n```\n";
   const hash = doc.indexOf("#");

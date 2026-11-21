@@ -99,6 +99,20 @@
   font-weight: 650;
 }
 
+.editor :global(.cm-quote) {
+  box-shadow: inset var(--spacing-1) 0 0 var(--color-border);
+}
+
+.editor :global(.cm-inline-code) {
+  padding: 0 var(--spacing-1);
+  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+  background: var(--color-surface);
+}
+
+.editor :global(.cm-bullet) {
+  color: var(--color-text-secondary);
+}
+
 .confirm {
   display: flex;
   align-items: center;
