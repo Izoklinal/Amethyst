@@ -13,6 +13,8 @@ const commands: QuickCommand[] = [
   { id: "palette.open", title: "Show Command Palette" },
   { id: "toolbar.hide", title: "Hide" },
   { id: "note.find", title: "Find Note" },
+  { id: "tab.activate", title: "Activate Tab" },
+  { id: "note.toggleTask", title: "Toggle Task" },
 ];
 
 test("an empty query lists every note, frequent ones first", () => {

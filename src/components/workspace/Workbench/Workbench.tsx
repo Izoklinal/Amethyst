@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import {
   clearStoredVaultPath,
   closeVault,
@@ -9,7 +10,11 @@ import {
   readStoredVaultPath,
   noteOutline,
   listVaultNotes,
+  readVaultImage,
+  readVaultNote,
+  resolveVaultEmbed,
   resolveVaultWikilink,
+  vaultAbsolutePath,
   vaultErrorMessage,
   writeStoredVaultPath,
   type NoteMatch,
@@ -31,7 +36,7 @@ import {
   toolbarButtons,
   writeHiddenToolbarButtons,
 } from "../../../workspace/toolbarState";
-import { cycleTab } from "../../../workspace/editorGroup";
+import { activateTab, cycleTab } from "../../../workspace/editorGroup";
 import {
   clampSidebarWidth,
   defaultLayout,
@@ -41,6 +46,9 @@ import {
   type ToolId,
 } from "../../../workspace/layoutState";
 import type { NoteEditorHandle } from "../../../editor/NoteEditor";
+import { embedLabel, headingSection } from "../../../editor/embed";
+import type { EmbedPaint } from "../../../editor/livePreview";
+import { noteLinkPath } from "../../../editor/noteLink";
 import { ContextMenu, type ContextMenuItem } from "../../ui/ContextMenu/ContextMenu";
 import { ActivityBar } from "../ActivityBar/ActivityBar";
 import { BottomPanel } from "../BottomPanel/BottomPanel";
@@ -75,6 +83,8 @@ export function Workbench() {
   const layoutRef = useRef(layout);
   const vaultRequest = useRef(0);
   const treeHandle = useRef<ExplorerTreeHandle | null>(null);
+  const [readingTabs, setReadingTabs] = useState<ReadonlySet<string>>(() => new Set());
+  const readingFocusRef = useRef(false);
   const commandArgument = useRef<string | null>(null);
   const noteEditorRef = useRef<NoteEditorHandle>(null);
   const activeNoteRef = useRef<{ path: string; text: string } | null>(null);
@@ -199,11 +209,19 @@ export function Workbench() {
   }
 
   function focusEditor() {
-    if (noteEditorRef.current) {
-      noteEditorRef.current.focus();
-      return;
-    }
-    document.getElementById("editor-area")?.focus();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (readingFocusRef.current) {
+          document.getElementById("note-reading")?.focus();
+          return;
+        }
+        if (noteEditorRef.current) {
+          noteEditorRef.current.focus();
+          return;
+        }
+        document.getElementById("editor-area")?.focus();
+      });
+    });
   }
 
   function focusExplorer() {
@@ -232,9 +250,56 @@ export function Workbench() {
     noteClosed.current(path);
   });
   const explorer = useExplorerActions(vault?.path ?? null, refreshExplorer);
+  readingFocusRef.current = notes.group.activeTabId
+    ? readingTabs.has(notes.group.activeTabId)
+    : false;
   activeNoteRef.current = notes.activeBuffer
     ? { path: notes.activeBuffer.path, text: notes.activeBuffer.text }
     : null;
+  const loadEmbed = useCallback(async (body: string): Promise<EmbedPaint> => {
+    const fallback = embedLabel(body) ?? body;
+    const source = activeNoteRef.current?.path;
+    if (!source) {
+      return { kind: "missing", text: "", src: "", name: fallback };
+    }
+    try {
+      const resolved = await resolveVaultEmbed(source, body);
+      const name = resolved.path.split("/").pop() ?? resolved.path;
+      if (resolved.kind === "note") {
+        const own = activeNoteRef.current;
+        const text =
+          own && own.path.replace(/\\/g, "/") === resolved.path
+            ? own.text
+            : await readVaultNote(resolved.path);
+        if (!resolved.heading) {
+          return { kind: "note", text, src: "", name };
+        }
+        const headings = await noteOutline(text);
+        return {
+          kind: "note",
+          text: headingSection(text, headings, resolved.heading) ?? "No heading matches that link.",
+          src: "",
+          name,
+        };
+      }
+      if (resolved.kind === "image") {
+        try {
+          const image = await readVaultImage(resolved.path);
+          return {
+            kind: "image",
+            text: "",
+            src: `data:${image.mediaType};base64,${image.base64}`,
+            name,
+          };
+        } catch {
+          return { kind: "file", text: "", src: "", name };
+        }
+      }
+      return { kind: "file", text: "", src: "", name };
+    } catch {
+      return { kind: "missing", text: "", src: "", name: fallback };
+    }
+  }, []);
   noteClosed.current = (path) => {
     if (explorer.selection?.path === path) {
       explorer.setSelection(null);
@@ -274,8 +339,36 @@ export function Workbench() {
         focusEditor,
         focusExplorer,
         resetLayout: () => setLayout(defaultLayout()),
-        nextTab: () => notes.setGroup((current) => cycleTab(current, 1)),
-        previousTab: () => notes.setGroup((current) => cycleTab(current, -1)),
+        nextTab: () => {
+          let changed = false;
+          notes.setGroup((current) => {
+            const next = cycleTab(current, 1);
+            changed = next.activeTabId !== current.activeTabId;
+            return next;
+          });
+          if (changed) {
+            focusEditor();
+          }
+        },
+        previousTab: () => {
+          let changed = false;
+          notes.setGroup((current) => {
+            const next = cycleTab(current, -1);
+            changed = next.activeTabId !== current.activeTabId;
+            return next;
+          });
+          if (changed) {
+            focusEditor();
+          }
+        },
+        activateTab: () => {
+          const tabId = commandArgument.current;
+          if (!tabId) {
+            return;
+          }
+          notes.setGroup((current) => activateTab(current, tabId));
+          focusEditor();
+        },
         closeTab: () => {
           if (notes.group.activeTabId) {
             notes.requestClose(notes.group.activeTabId);
@@ -289,6 +382,105 @@ export function Workbench() {
         moveEntry: () => showExplorerAction(explorer.move),
         deleteEntry: () => showExplorerAction(explorer.remove),
         saveNote: notes.saveActive,
+        toggleTask: () => {
+          const editor = noteEditorRef.current;
+          const at = Number(commandArgument.current);
+          if (!editor || !Number.isInteger(at)) {
+            return;
+          }
+          const marker = editor.text().slice(at, at + 3);
+          if (marker === "[ ]") {
+            editor.replace(at, at + 3, "[x]");
+          } else if (marker === "[x]" || marker === "[X]") {
+            editor.replace(at, at + 3, "[ ]");
+          }
+        },
+        toggleReading: () => {
+          const tabId = notes.group.activeTabId;
+          if (!tabId) {
+            return;
+          }
+          setReadingTabs((current) => {
+            const next = new Set(current);
+            if (next.has(tabId)) {
+              next.delete(tabId);
+            } else {
+              next.add(tabId);
+            }
+            return next;
+          });
+          focusEditor();
+        },
+        toggleCallout: () => {
+          const editor = noteEditorRef.current;
+          const at = Number(commandArgument.current);
+          if (!editor || !Number.isInteger(at)) {
+            return;
+          }
+          const text = editor.text();
+          if (text[at] !== "]") {
+            return;
+          }
+          const next = text[at + 1];
+          if (next === "-") {
+            editor.replace(at + 1, at + 2, "+");
+          } else if (next === "+") {
+            editor.replace(at + 1, at + 2, "-");
+          } else {
+            editor.replace(at + 1, at + 1, "-");
+          }
+        },
+        openEmbed: () => {
+          const body = commandArgument.current?.trim() ?? "";
+          const source = activeNoteRef.current?.path;
+          if (!body || !source) {
+            return;
+          }
+          void resolveVaultEmbed(source, body)
+            .then(async (resolved) => {
+              if (resolved.kind === "note") {
+                if (resolved.heading) {
+                  pendingHeading.current = { path: resolved.path, heading: resolved.heading };
+                  setHeadingRequest((current) => current + 1);
+                } else {
+                  pendingHeading.current = null;
+                }
+                if (resolved.path !== source.replace(/\\/g, "/")) {
+                  const name = resolved.path.split("/").pop() ?? resolved.path;
+                  notes.openMarkdown({ path: resolved.path, name, kind: "file" });
+                }
+                setLinkStatus(null);
+                return;
+              }
+              const path = await vaultAbsolutePath(resolved.path);
+              await openPath(path);
+              setLinkStatus(null);
+            })
+            .catch((error: unknown) => {
+              setLinkStatus(vaultErrorMessage(error));
+            });
+        },
+        openLink: () => {
+          const url = commandArgument.current?.trim() ?? "";
+          if (!url) {
+            return;
+          }
+          if (/^(https?:|mailto:)/i.test(url)) {
+            void openUrl(url).catch((error: unknown) => {
+              setLinkStatus(vaultErrorMessage(error));
+            });
+            return;
+          }
+          const source = activeNoteRef.current?.path;
+          const path = source ? noteLinkPath(source, url) : null;
+          if (!path) {
+            setLinkStatus("This link can't be opened.");
+            return;
+          }
+          const name = path.split("/").pop() ?? path;
+          notes.openMarkdown({ path, name, kind: "file" });
+          setLinkStatus(null);
+        },
         followLink: () => {
           const current = activeNoteRef.current;
           const editor = noteEditorRef.current;
@@ -479,10 +671,11 @@ export function Workbench() {
         return;
       }
       const target = event.target;
+      const inReading = target instanceof Element && target.closest("#note-reading");
       const inFormField =
         target instanceof HTMLInputElement ||
         (target instanceof HTMLTextAreaElement && target.dataset.noteEditor !== "true");
-      if (inFormField) {
+      if (inFormField && !inReading) {
         return;
       }
       const shortcut = shortcutFromEvent(event);
@@ -614,13 +807,11 @@ export function Workbench() {
               text={notes.activeBuffer ? notes.activeBuffer.text : null}
               dirtyTabIds={notes.dirtyTabIds}
               pendingTitle={notes.pendingTab?.title ?? null}
-              onActivate={(tabId) =>
-                notes.setGroup((current) =>
-                  current.tabs.some((tab) => tab.id === tabId)
-                    ? { ...current, activeTabId: tabId }
-                    : current,
-                )
-              }
+              onActivate={(tabId) => {
+                commandArgument.current = tabId;
+                commands.find((command) => command.id === "tab.activate")?.run();
+                commandArgument.current = null;
+              }}
               onClose={notes.requestClose}
               onChange={(text) => {
                 if (notes.group.activeTabId) {
@@ -631,6 +822,35 @@ export function Workbench() {
               onDiscardClose={notes.discard}
               onCancelClose={notes.cancelClose}
               editorRef={noteEditorRef}
+              onFollowLink={() => {
+                commands.find((command) => command.id === "note.followLink")?.run();
+              }}
+              onToggleTask={(offset) => {
+                commandArgument.current = String(offset);
+                commands.find((command) => command.id === "note.toggleTask")?.run();
+                commandArgument.current = null;
+              }}
+              onOpenLink={(url) => {
+                commandArgument.current = url;
+                commands.find((command) => command.id === "note.openLink")?.run();
+                commandArgument.current = null;
+              }}
+              onOpenEmbed={(body) => {
+                commandArgument.current = body;
+                commands.find((command) => command.id === "note.openEmbed")?.run();
+                commandArgument.current = null;
+              }}
+              onToggleCallout={(offset) => {
+                commandArgument.current = String(offset);
+                commands.find((command) => command.id === "note.toggleCallout")?.run();
+                commandArgument.current = null;
+              }}
+              loadEmbed={loadEmbed}
+              reading={notes.group.activeTabId ? readingTabs.has(notes.group.activeTabId) : false}
+              onFollowWikilink={(offset) => {
+                noteEditorRef.current?.select(offset);
+                commands.find((command) => command.id === "note.followLink")?.run();
+              }}
               onOpenMenu={(x, y) =>
                 openMenu(x, y, [
                   { commandId: "note.cut" },

@@ -1,5 +1,7 @@
 import type { Ref } from "react";
 import { NoteEditor, type NoteEditorHandle } from "../../../editor/NoteEditor";
+import type { EmbedLoader } from "../../../editor/livePreview";
+import { ReadingView } from "../../../editor/ReadingView";
 import type { EditorGroup as EditorGroupModel } from "../../../workspace/editorGroup";
 import { IconButton } from "../../ui/IconButton/IconButton";
 import { CheckIcon, CloseIcon, DiscardIcon } from "../../ui/icons";
@@ -18,6 +20,14 @@ type EditorGroupProps = {
   onDiscardClose: () => void;
   onCancelClose: () => void;
   onOpenMenu: (x: number, y: number) => void;
+  onFollowLink: () => void;
+  onToggleTask: (offset: number) => void;
+  onOpenLink: (url: string) => void;
+  onOpenEmbed: (body: string) => void;
+  onToggleCallout: (offset: number) => void;
+  loadEmbed: EmbedLoader;
+  reading: boolean;
+  onFollowWikilink: (offset: number) => void;
   editorRef: Ref<NoteEditorHandle>;
 };
 
@@ -33,6 +43,14 @@ export function EditorGroup({
   onDiscardClose,
   onCancelClose,
   onOpenMenu,
+  onFollowLink,
+  onToggleTask,
+  onOpenLink,
+  onOpenEmbed,
+  onToggleCallout,
+  loadEmbed,
+  reading,
+  onFollowWikilink,
   editorRef,
 }: EditorGroupProps) {
   return (
@@ -69,16 +87,33 @@ export function EditorGroup({
         {text === null ? (
           <p className={styles.empty}>No note open.</p>
         ) : (
-          <div className={styles.editor}>
+          <div className={reading ? styles.editorHidden : styles.editor}>
             <NoteEditor
               key={group.activeTabId ?? "note"}
               ref={editorRef}
               text={text}
               onChange={onChange}
               onContextMenu={onOpenMenu}
+              onFollowLink={onFollowLink}
+              onToggleTask={onToggleTask}
+              onOpenLink={onOpenLink}
+              onOpenEmbed={onOpenEmbed}
+              onToggleCallout={onToggleCallout}
+              loadEmbed={loadEmbed}
             />
           </div>
         )}
+        {reading && text !== null ? (
+          <ReadingView
+            text={text}
+            onToggleTask={onToggleTask}
+            onOpenLink={onOpenLink}
+            onFollowWikilink={onFollowWikilink}
+            onOpenEmbed={onOpenEmbed}
+            onToggleCallout={onToggleCallout}
+            loadEmbed={loadEmbed}
+          />
+        ) : null}
       </div>
     </section>
   );

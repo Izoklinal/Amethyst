@@ -61,6 +61,11 @@ export const defaultKeybindings: Keybinding[] = [
     keys: [{ code: "KeyE", ctrl: true, shift: true, alt: false }],
   },
   {
+    commandId: "note.toggleReading",
+    when: "global",
+    keys: [{ code: "KeyE", ctrl: true, shift: false, alt: false }],
+  },
+  {
     commandId: "editor.focus",
     when: "global",
     keys: [{ code: "Digit1", ctrl: true, shift: false, alt: false }],

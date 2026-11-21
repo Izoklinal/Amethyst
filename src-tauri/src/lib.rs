@@ -1,7 +1,10 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use amethyst_core::links::{backlinks_to, resolve_editor_link, Backlink, OpenNote, ResolvedLink};
+use amethyst_core::links::{
+    backlinks_to, resolve_editor_link, resolve_embed, Backlink, OpenNote, ResolvedEmbed,
+    ResolvedLink,
+};
 use amethyst_core::outline::{outline_of, Heading};
 use amethyst_core::vault::{DirectoryEntry, NoteMatch, Vault, VaultError, VaultInfo};
 use amethyst_core::watch::VaultWatcher;
@@ -163,6 +166,88 @@ fn resolve_vault_wikilink(
     resolve_editor_link(vault, &source, &text, offset).map_err(|error| error.to_string())
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultImage {
+    media_type: String,
+    base64: String,
+}
+
+#[tauri::command]
+fn resolve_vault_embed(
+    session: State<VaultSession>,
+    source: String,
+    body: String,
+) -> Result<ResolvedEmbed, String> {
+    let guard = lock_session(&session)?;
+    let vault = guard.vault.as_ref().ok_or("No vault is open")?;
+    resolve_embed(vault, &source, &body).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn read_vault_image(
+    session: State<VaultSession>,
+    relative_path: String,
+) -> Result<VaultImage, String> {
+    with_vault(&session, |vault| {
+        let bytes = vault.read_image(&relative_path)?;
+        let media_type = image_media_type(&relative_path).ok_or(VaultError::InvalidName)?;
+        Ok(VaultImage {
+            media_type: media_type.to_string(),
+            base64: base64_encode(&bytes),
+        })
+    })
+}
+
+#[tauri::command]
+fn vault_absolute_path(
+    session: State<VaultSession>,
+    relative_path: String,
+) -> Result<String, String> {
+    with_vault(&session, |vault| vault.absolute_path(&relative_path))
+}
+
+fn image_media_type(path: &str) -> Option<&'static str> {
+    let extension = Path::new(path).extension()?.to_str()?;
+    match extension.to_ascii_lowercase().as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        _ => None,
+    }
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut encoded = String::new();
+    let mut index = 0;
+    while index + 3 <= bytes.len() {
+        let chunk = u32::from(bytes[index]) << 16
+            | u32::from(bytes[index + 1]) << 8
+            | u32::from(bytes[index + 2]);
+        encoded.push(TABLE[((chunk >> 18) & 63) as usize] as char);
+        encoded.push(TABLE[((chunk >> 12) & 63) as usize] as char);
+        encoded.push(TABLE[((chunk >> 6) & 63) as usize] as char);
+        encoded.push(TABLE[(chunk & 63) as usize] as char);
+        index += 3;
+    }
+    if index < bytes.len() {
+        let first = bytes[index];
+        encoded.push(TABLE[(first >> 2) as usize] as char);
+        if index + 1 < bytes.len() {
+            let second = bytes[index + 1];
+            encoded.push(TABLE[(((first & 0x03) << 4) | (second >> 4)) as usize] as char);
+            encoded.push(TABLE[((second & 0x0f) << 2) as usize] as char);
+        } else {
+            encoded.push(TABLE[((first & 0x03) << 4) as usize] as char);
+            encoded.push('=');
+        }
+        encoded.push('=');
+    }
+    encoded
+}
+
 #[tauri::command]
 fn read_vault_note(session: State<VaultSession>, relative_path: String) -> Result<String, String> {
     with_vault(&session, |vault| vault.read_note(&relative_path))
@@ -204,6 +289,9 @@ pub fn run() {
             note_outline,
             vault_backlinks,
             resolve_vault_wikilink,
+            resolve_vault_embed,
+            read_vault_image,
+            vault_absolute_path,
             read_vault_note,
             write_vault_note
         ])

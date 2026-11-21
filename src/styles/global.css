@@ -40,6 +40,12 @@
   --color-text-secondary: #5f5f5f;
   --color-border: #dedede;
   --color-accent: #6750a4;
+  --color-callout-note: #4c6fd6;
+  --color-callout-info: #2f86c7;
+  --color-callout-tip: #2f8f62;
+  --color-callout-warning: #b57914;
+  --color-callout-danger: #c4473a;
+  --color-callout-default: #6f6f6f;
 }
 
 :root[data-theme="dark"] {
@@ -51,6 +57,12 @@
   --color-text-secondary: #c4c4c4;
   --color-border: #3a3a3a;
   --color-accent: #d0bcff;
+  --color-callout-note: #9eb6ff;
+  --color-callout-info: #8ec8f6;
+  --color-callout-tip: #8ed4b0;
+  --color-callout-warning: #f0c36a;
+  --color-callout-danger: #f0a097;
+  --color-callout-default: #b0b0b0;
 }
 
 html,

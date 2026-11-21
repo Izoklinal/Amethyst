@@ -80,6 +80,31 @@ export function resolveVaultWikilink(
   return invoke<ResolvedLink>("resolve_vault_wikilink", { source, text, offset });
 }
 
+export type EmbedKind = "note" | "image" | "file";
+
+export type ResolvedEmbed = {
+  path: string;
+  kind: EmbedKind;
+  heading: string | null;
+};
+
+export type VaultImage = {
+  mediaType: string;
+  base64: string;
+};
+
+export function resolveVaultEmbed(source: string, body: string): Promise<ResolvedEmbed> {
+  return invoke<ResolvedEmbed>("resolve_vault_embed", { source, body });
+}
+
+export function readVaultImage(relativePath: string): Promise<VaultImage> {
+  return invoke<VaultImage>("read_vault_image", { relativePath });
+}
+
+export function vaultAbsolutePath(relativePath: string): Promise<string> {
+  return invoke<string>("vault_absolute_path", { relativePath });
+}
+
 export type Backlink = {
   path: string;
   name: string;

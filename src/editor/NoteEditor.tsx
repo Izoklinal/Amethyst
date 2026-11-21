@@ -3,7 +3,8 @@ import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { livePreview } from "./livePreview";
+import type { EmbedLoader } from "./livePreview";
+import { livePreview, setEmbedLoader } from "./livePreview";
 
 export type NoteEditorHandle = {
   focus: () => void;
@@ -17,6 +18,12 @@ type NoteEditorProps = {
   text: string;
   onChange: (text: string) => void;
   onContextMenu: (x: number, y: number) => void;
+  onFollowLink: () => void;
+  onToggleTask: (offset: number) => void;
+  onOpenLink: (url: string) => void;
+  onOpenEmbed: (body: string) => void;
+  onToggleCallout: (offset: number) => void;
+  loadEmbed: EmbedLoader;
 };
 
 const noteExtensions = [
@@ -32,15 +39,38 @@ const noteExtensions = [
 ];
 
 export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function NoteEditor(
-  { text, onChange, onContextMenu },
+  {
+    text,
+    onChange,
+    onContextMenu,
+    onFollowLink,
+    onToggleTask,
+    onOpenLink,
+    onOpenEmbed,
+    onToggleCallout,
+    loadEmbed,
+  },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
+  const onFollowRef = useRef(onFollowLink);
+  const onToggleTaskRef = useRef(onToggleTask);
+  const onOpenLinkRef = useRef(onOpenLink);
+  const onOpenEmbedRef = useRef(onOpenEmbed);
+  const onToggleCalloutRef = useRef(onToggleCallout);
+  const loadEmbedRef = useRef(loadEmbed);
   const syncing = useRef(false);
   const initialText = useRef(text);
   onChangeRef.current = onChange;
+  onFollowRef.current = onFollowLink;
+  onToggleTaskRef.current = onToggleTask;
+  onOpenLinkRef.current = onOpenLink;
+  onOpenEmbedRef.current = onOpenEmbed;
+  onToggleCalloutRef.current = onToggleCallout;
+  loadEmbedRef.current = loadEmbed;
+  setEmbedLoader((body) => loadEmbedRef.current(body));
 
   useEffect(() => {
     const parent = hostRef.current;
@@ -53,6 +83,66 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
         doc: initialText.current,
         extensions: [
           ...noteExtensions,
+          EditorView.domEventHandlers({
+            mousedown(event, view) {
+              const target = event.target;
+              if (!(target instanceof Element)) {
+                return false;
+              }
+              const callout = target.closest(".cm-callout-label");
+              if (callout instanceof HTMLElement && view.dom.contains(callout)) {
+                const at = Number(callout.dataset.calloutAt);
+                if (!Number.isInteger(at)) {
+                  return false;
+                }
+                event.preventDefault();
+                onToggleCalloutRef.current(at);
+                return true;
+              }
+              const embed = target.closest(".cm-embed");
+              if (embed instanceof HTMLElement && view.dom.contains(embed)) {
+                const body = embed.dataset.embedBody;
+                if (!body) {
+                  return false;
+                }
+                event.preventDefault();
+                onOpenEmbedRef.current(body);
+                return true;
+              }
+              const markdownLink = target.closest(".cm-md-link");
+              if (markdownLink instanceof HTMLElement && view.dom.contains(markdownLink)) {
+                const url = markdownLink.dataset.linkUrl;
+                if (!url) {
+                  return false;
+                }
+                event.preventDefault();
+                onOpenLinkRef.current(url);
+                return true;
+              }
+              const task = target.closest(".cm-task");
+              if (task instanceof HTMLElement && view.dom.contains(task)) {
+                const taskFrom = Number(task.dataset.taskFrom);
+                if (!Number.isInteger(taskFrom)) {
+                  return false;
+                }
+                event.preventDefault();
+                onToggleTaskRef.current(taskFrom);
+                return true;
+              }
+              const link = target.closest(".cm-wikilink");
+              if (!(link instanceof HTMLElement) || !view.dom.contains(link)) {
+                return false;
+              }
+              const position = Number(link.dataset.wikilinkFrom);
+              if (!Number.isInteger(position)) {
+                return false;
+              }
+              event.preventDefault();
+              view.dispatch({ selection: { anchor: position + 2 } });
+              onFollowRef.current();
+              return true;
+            },
+          }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged && !syncing.current) {
               onChangeRef.current(update.state.doc.toString());
@@ -63,6 +153,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
     });
     viewRef.current = view;
     return () => {
+      setEmbedLoader(null);
       view.destroy();
       viewRef.current = null;
     };

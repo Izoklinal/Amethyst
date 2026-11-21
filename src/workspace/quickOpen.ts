@@ -12,7 +12,15 @@ export type QuickOpenItem =
   | { kind: "note"; note: QuickNote }
   | { kind: "command"; command: QuickCommand };
 
-const HIDDEN_COMMANDS = new Set(["palette.open", "note.revealHeading"]);
+const HIDDEN_COMMANDS = new Set([
+  "palette.open",
+  "note.revealHeading",
+  "note.toggleTask",
+  "note.openLink",
+  "note.openEmbed",
+  "note.toggleCallout",
+  "tab.activate",
+]);
 
 export function pickerItems(
   query: string,

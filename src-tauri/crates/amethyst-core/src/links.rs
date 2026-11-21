@@ -98,6 +98,121 @@ pub fn resolve_editor_link(
     Ok(ResolvedLink { path, heading })
 }
 
+/// What an embed displays. A file that is not a note or an image is named only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EmbedKind {
+    Note,
+    Image,
+    File,
+}
+
+/// A vault file selected by an embed, plus an optional heading fragment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedEmbed {
+    pub path: String,
+    pub kind: EmbedKind,
+    pub heading: Option<String>,
+}
+
+/// Resolves the inside of `![[...]]`. This does not read or write the target.
+pub fn resolve_embed(
+    vault: &Vault,
+    source: &str,
+    body: &str,
+) -> Result<ResolvedEmbed, LinkError> {
+    let (file, heading) = split_embed(body).ok_or(LinkError::NoLink)?;
+    if file.is_empty() {
+        return Ok(ResolvedEmbed {
+            path: source.replace('\\', "/"),
+            kind: EmbedKind::Note,
+            heading,
+        });
+    }
+    let kind = embed_kind(&file);
+    let files = without_trash(match kind {
+        EmbedKind::Note => markdown_files(vault)?,
+        EmbedKind::Image | EmbedKind::File => all_files(vault)?,
+    });
+    let path = if file.contains('/') || file.contains('\\') {
+        resolve_path(&files, &file)?
+    } else {
+        resolve_name(&files, source, &file)?
+    };
+    Ok(ResolvedEmbed { path, kind, heading })
+}
+
+fn split_embed(body: &str) -> Option<(String, Option<String>)> {
+    let main = body.split('|').next()?.trim();
+    if main.is_empty() {
+        return None;
+    }
+    let (file, heading) = match main.split_once('#') {
+        Some((file, heading)) => (file.trim().to_string(), heading_text(heading)),
+        None => (
+            main.split('^').next().unwrap_or("").trim().to_string(),
+            None,
+        ),
+    };
+    if file.is_empty() && heading.is_none() {
+        return None;
+    }
+    Some((file, heading))
+}
+
+fn embed_kind(file: &str) -> EmbedKind {
+    match Path::new(file)
+        .extension()
+        .and_then(|extension| extension.to_str())
+    {
+        Some(extension) if is_image_extension(extension) => EmbedKind::Image,
+        Some(extension) if !extension.eq_ignore_ascii_case("md") && !extension.is_empty() => {
+            EmbedKind::File
+        }
+        _ => EmbedKind::Note,
+    }
+}
+
+fn is_image_extension(extension: &str) -> bool {
+    matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp"
+    )
+}
+
+fn without_trash(files: Vec<String>) -> Vec<String> {
+    files
+        .into_iter()
+        .filter(|path| !path.split('/').any(|part| part == ".trash"))
+        .collect()
+}
+
+fn all_files(vault: &Vault) -> Result<Vec<String>, LinkError> {
+    let mut files = Vec::new();
+    collect_all(vault, "", &mut files)?;
+    Ok(files)
+}
+
+fn collect_all(vault: &Vault, directory: &str, files: &mut Vec<String>) -> Result<(), LinkError> {
+    let entries = vault.list(directory).map_err(LinkError::Vault)?;
+    for entry in entries {
+        if entry.kind == EntryKind::Directory && entry.name == ".trash" {
+            continue;
+        }
+        let path = if directory.is_empty() {
+            entry.name
+        } else {
+            format!("{directory}/{}", entry.name)
+        };
+        match entry.kind {
+            EntryKind::Directory => collect_all(vault, &path, files)?,
+            EntryKind::File => files.push(path),
+        }
+    }
+    Ok(())
+}
+
 /// Notes that link to `target`. Reads files and does not write to the vault.
 pub fn backlinks_to(
     vault: &Vault,
@@ -686,6 +801,40 @@ mod tests {
         );
         assert_eq!(attachment, Err(LinkError::NotANote));
         assert_eq!(fs::read_dir(&temp.path).expect("read").count(), before);
+    }
+
+    #[test]
+    fn resolve_embed_finds_a_note_a_heading_and_an_image() {
+        let temp = TempVault::new();
+        fs::write(temp.path.join("Note.md"), "# Head\n\nbody").expect("note");
+        fs::write(temp.path.join("pic.png"), [0x89, b'P', b'N', b'G']).expect("image");
+        fs::create_dir_all(temp.path.join(".trash")).expect("trash");
+        fs::write(temp.path.join(".trash").join("pic.png"), b"gone").expect("trashed");
+        let vault = Vault::open(&temp.path).expect("open");
+        assert_eq!(
+            resolve_embed(&vault, "Other.md", "Note#Head").expect("note"),
+            ResolvedEmbed {
+                path: "Note.md".to_string(),
+                kind: EmbedKind::Note,
+                heading: Some("Head".to_string()),
+            }
+        );
+        let image = resolve_embed(&vault, "Other.md", "pic.png|100").expect("image");
+        assert_eq!(
+            image,
+            ResolvedEmbed {
+                path: "pic.png".to_string(),
+                kind: EmbedKind::Image,
+                heading: None,
+            }
+        );
+        assert_eq!(vault.read_image(&image.path).expect("bytes"), b"\x89PNG");
+        assert!(vault.read_image("Note.md").is_err());
+        assert_eq!(
+            resolve_embed(&vault, "Other.md", "|alias"),
+            Err(LinkError::NoLink)
+        );
+        assert!(vault.absolute_path("../pic.png").is_err());
     }
 
     #[test]

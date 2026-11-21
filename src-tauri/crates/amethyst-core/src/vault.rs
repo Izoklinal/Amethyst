@@ -256,6 +256,27 @@ impl Vault {
         fs::rename(&source, &destination).map_err(map_io)
     }
 
+    /// Reads an image that stays inside the vault. Other files are rejected.
+    pub fn read_image(&self, relative_path: &str) -> Result<Vec<u8>, VaultError> {
+        if !is_image_name(relative_path) {
+            return Err(VaultError::InvalidName);
+        }
+        let path = self.resolve_entry(relative_path)?;
+        if !path.is_file() {
+            return Err(VaultError::InvalidName);
+        }
+        let metadata = fs::metadata(&path).map_err(map_io)?;
+        if metadata.len() > MAX_NOTE_BYTES {
+            return Err(VaultError::TooLarge);
+        }
+        fs::read(&path).map_err(map_io)
+    }
+
+    /// Canonical path of a vault file, after the path has been checked.
+    pub fn absolute_path(&self, relative_path: &str) -> Result<String, VaultError> {
+        Ok(display_path(&self.resolve_entry(relative_path)?))
+    }
+
     /// Reads one Markdown note without changing it.
     pub fn read_note(&self, relative_path: &str) -> Result<String, VaultError> {
         let path = self.resolve_entry(relative_path)?;
@@ -392,6 +413,18 @@ fn read_markdown_file(path: &Path) -> Result<String, VaultError> {
     }
     let bytes = fs::read(path).map_err(map_io)?;
     String::from_utf8(bytes).map_err(|_| VaultError::NotUtf8)
+}
+
+fn is_image_name(name: &str) -> bool {
+    Path::new(name)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "gif" | "webp"
+            )
+        })
 }
 
 fn is_markdown_name(name: &str) -> bool {

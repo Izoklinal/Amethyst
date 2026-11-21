@@ -14,6 +14,7 @@ export type CommandActions = {
   resetLayout: () => void;
   nextTab: () => void;
   previousTab: () => void;
+  activateTab: () => void;
   closeTab: () => void;
   openPalette: () => void;
   findNote: () => void;
@@ -32,6 +33,11 @@ export type CommandActions = {
   activateExplorer: () => void;
   saveNote: () => void;
   followLink: () => void;
+  toggleTask: () => void;
+  openLink: () => void;
+  openEmbed: () => void;
+  toggleCallout: () => void;
+  toggleReading: () => void;
   revealHeading: () => void;
   cutNote: () => void;
   copyNote: () => void;
@@ -61,6 +67,11 @@ export function createCommands(actions: CommandActions): Command[] {
     { id: "explorer.focus", title: "Focus Explorer", run: actions.focusExplorer },
     { id: "note.save", title: "Save Note", run: actions.saveNote },
     { id: "note.followLink", title: "Follow Link", run: actions.followLink },
+    { id: "note.toggleTask", title: "Toggle Task", run: actions.toggleTask },
+    { id: "note.openLink", title: "Open Link", run: actions.openLink },
+    { id: "note.openEmbed", title: "Open Embed", run: actions.openEmbed },
+    { id: "note.toggleCallout", title: "Toggle Callout", run: actions.toggleCallout },
+    { id: "note.toggleReading", title: "Toggle Reading Mode", run: actions.toggleReading },
     { id: "note.revealHeading", title: "Reveal Heading", run: actions.revealHeading },
     { id: "note.cut", title: "Cut", run: actions.cutNote },
     { id: "note.copy", title: "Copy", run: actions.copyNote },
@@ -76,6 +87,7 @@ export function createCommands(actions: CommandActions): Command[] {
     { id: "layout.reset", title: "Reset Layout", run: actions.resetLayout },
     { id: "tab.next", title: "Next Tab", run: actions.nextTab },
     { id: "tab.previous", title: "Previous Tab", run: actions.previousTab },
+    { id: "tab.activate", title: "Activate Tab", run: actions.activateTab },
     { id: "tab.close", title: "Close Tab", run: actions.closeTab },
   ];
 }
