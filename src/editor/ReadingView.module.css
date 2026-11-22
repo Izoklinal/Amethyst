@@ -27,7 +27,6 @@
   font-size: 1.2em;
 }
 
-.frontmatter,
 .code {
   margin: var(--spacing-2) 0;
   padding: var(--spacing-2);

@@ -5,6 +5,24 @@ import { EditorView, keymap } from "@codemirror/view";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { EmbedLoader } from "./livePreview";
 import { exitEmptyTask, livePreview, setEmbedLoader } from "./livePreview";
+import { frontmatterRange } from "./frontmatter.ts";
+
+function initialAnchor(text: string, source: boolean): number {
+  const span = frontmatterRange(text);
+  if (!source && span) {
+    return span.to;
+  }
+  return 0;
+}
+
+function mappedAnchor(previous: string, next: string, head: number): number {
+  const oldEnd = frontmatterRange(previous)?.to ?? 0;
+  const newEnd = frontmatterRange(next)?.to ?? 0;
+  if (head >= oldEnd) {
+    return Math.min(next.length, Math.max(0, head - oldEnd + newEnd));
+  }
+  return Math.min(head, newEnd);
+}
 
 export type NoteEditorHandle = {
   focus: () => void;
@@ -89,6 +107,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
       parent,
       state: EditorState.create({
         doc: initialText.current,
+        selection: { anchor: initialAnchor(initialText.current, sourceRef.current) },
         extensions: [
           ...noteExtensions.slice(0, 5),
           previewCompartment.of(sourceRef.current ? [] : livePreview()),
@@ -198,8 +217,12 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
     if (current === text) {
       return;
     }
+    const head = view.state.selection.main.head;
     syncing.current = true;
-    view.dispatch({ changes: { from: 0, to: current.length, insert: text } });
+    view.dispatch({
+      changes: { from: 0, to: current.length, insert: text },
+      selection: { anchor: mappedAnchor(current, text, head) },
+    });
     syncing.current = false;
   }, [text]);
 

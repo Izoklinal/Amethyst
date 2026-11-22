@@ -6,6 +6,7 @@ import type { EditorGroup as EditorGroupModel } from "../../../workspace/editorG
 import { IconButton } from "../../ui/IconButton/IconButton";
 import { CheckIcon, CloseIcon, DiscardIcon } from "../../ui/icons";
 import { EditorTab } from "../EditorTab/EditorTab";
+import { Properties } from "../Properties/Properties";
 import styles from "./EditorGroup.module.css";
 
 type EditorGroupProps = {
@@ -89,34 +90,39 @@ export function EditorGroup({
         {text === null ? (
           <p className={styles.empty}>No note open.</p>
         ) : (
-          <div className={reading ? styles.editorHidden : styles.editor}>
-            <NoteEditor
-              key={group.activeTabId ?? "note"}
-              ref={editorRef}
-              text={text}
-              onChange={onChange}
-              onContextMenu={onOpenMenu}
-              onFollowLink={onFollowLink}
-              onToggleTask={onToggleTask}
-              onOpenLink={onOpenLink}
-              onOpenEmbed={onOpenEmbed}
-              onToggleCallout={onToggleCallout}
-              loadEmbed={loadEmbed}
-              source={source}
-            />
+          <div className={styles.note}>
+            {source ? null : <Properties text={text} onChange={onChange} />}
+            <div className={styles.noteText}>
+              <div className={reading ? styles.editorHidden : styles.editor}>
+                <NoteEditor
+                  key={group.activeTabId ?? "note"}
+                  ref={editorRef}
+                  text={text}
+                  onChange={onChange}
+                  onContextMenu={onOpenMenu}
+                  onFollowLink={onFollowLink}
+                  onToggleTask={onToggleTask}
+                  onOpenLink={onOpenLink}
+                  onOpenEmbed={onOpenEmbed}
+                  onToggleCallout={onToggleCallout}
+                  loadEmbed={loadEmbed}
+                  source={source}
+                />
+              </div>
+              {reading ? (
+                <ReadingView
+                  text={text}
+                  onToggleTask={onToggleTask}
+                  onOpenLink={onOpenLink}
+                  onFollowWikilink={onFollowWikilink}
+                  onOpenEmbed={onOpenEmbed}
+                  onToggleCallout={onToggleCallout}
+                  loadEmbed={loadEmbed}
+                />
+              ) : null}
+            </div>
           </div>
         )}
-        {reading && text !== null ? (
-          <ReadingView
-            text={text}
-            onToggleTask={onToggleTask}
-            onOpenLink={onOpenLink}
-            onFollowWikilink={onFollowWikilink}
-            onOpenEmbed={onOpenEmbed}
-            onToggleCallout={onToggleCallout}
-            loadEmbed={loadEmbed}
-          />
-        ) : null}
       </div>
     </section>
   );

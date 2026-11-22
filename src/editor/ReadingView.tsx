@@ -44,7 +44,7 @@ export function ReadingView({
 function Block(props: { block: ReadingBlock } & Omit<ReadingViewProps, "text">) {
   const { block } = props;
   if (block.kind === "frontmatter") {
-    return <pre className={styles.frontmatter}>{block.text}</pre>;
+    return null;
   }
   if (block.kind === "heading") {
     const Tag = `h${block.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";

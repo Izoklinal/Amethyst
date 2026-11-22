@@ -77,6 +77,41 @@ export function noteBlockOffset(text: string, block: string): Promise<number | n
   return invoke<number | null>("note_block_offset", { text, block });
 }
 
+export type PropertyValue =
+  | { type: "text"; value: string }
+  | { type: "number"; value: number }
+  | { type: "boolean"; value: boolean }
+  | { type: "date"; value: string }
+  | { type: "list"; value: string[] }
+  | { type: "tags"; value: string[] }
+  | { type: "coordinates"; value: { lat: number; lng: number } }
+  | { type: "unknown"; value: string };
+
+export type NoteProperty = {
+  key: string;
+  value: PropertyValue;
+};
+
+export type NoteProperties = {
+  valid: boolean;
+  raw: string | null;
+  properties: NoteProperty[];
+};
+
+export type PropertyChange =
+  | { kind: "set"; key: string; value: PropertyValue }
+  | { kind: "rename"; from: string; to: string }
+  | { kind: "delete"; key: string }
+  | { kind: "add"; key: string; value: PropertyValue };
+
+export function noteProperties(text: string): Promise<NoteProperties> {
+  return invoke<NoteProperties>("note_properties", { text });
+}
+
+export function noteApplyProperty(text: string, change: PropertyChange): Promise<string> {
+  return invoke<string>("note_apply_property", { text, change });
+}
+
 export function resolveVaultWikilink(
   source: string,
   text: string,

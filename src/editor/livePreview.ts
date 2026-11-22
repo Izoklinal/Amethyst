@@ -10,6 +10,7 @@ import {
 import { RangeSetBuilder, StateField, type EditorState, type Extension } from "@codemirror/state";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
 import { embedLabel } from "./embed.ts";
+import { frontmatterRange } from "./frontmatter.ts";
 
 const BLOCK_CODE_NODES = new Set(["FencedCode", "CodeBlock"]);
 
@@ -302,7 +303,43 @@ export function livePreview(): Extension {
       { decorations: (value) => value.decorations },
     ),
     calloutFolds,
+    frontmatterFolds,
   ];
+}
+
+/** Hidden frontmatter. A direct decoration set, so it may cover line breaks. */
+export const frontmatterFolds = StateField.define<DecorationSet>({
+  create(state) {
+    return frontmatterDecorations(state);
+  },
+  update(folded, transaction) {
+    if (transaction.docChanged || transaction.selection) {
+      return frontmatterDecorations(transaction.state);
+    }
+    return folded;
+  },
+  provide(field) {
+    return EditorView.decorations.from(field);
+  },
+});
+
+function frontmatterDecorations(state: EditorState): DecorationSet {
+  const span = frontmatterRange(state.doc.toString());
+  if (!span || editingFrontmatter(state, span.from, span.to)) {
+    return Decoration.none;
+  }
+  const builder = new RangeSetBuilder<Decoration>();
+  builder.add(span.from, span.to, Decoration.replace({}));
+  return builder.finish();
+}
+
+function editingFrontmatter(state: EditorState, from: number, to: number): boolean {
+  return state.selection.ranges.some((range) => {
+    if (range.empty) {
+      return range.head >= from && range.head < to;
+    }
+    return range.from < to && range.to > from;
+  });
 }
 
 /** Hidden callout bodies. A direct decoration set, so it may cover line breaks. */

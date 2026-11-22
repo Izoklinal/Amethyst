@@ -6,6 +6,7 @@ use amethyst_core::links::{
     ResolvedEmbed, ResolvedLink,
 };
 use amethyst_core::outline::{outline_of, Heading};
+use amethyst_core::properties::{apply_property, read_properties, NoteProperties, PropertyChange};
 use amethyst_core::vault::{DirectoryEntry, NoteMatch, Vault, VaultError, VaultInfo};
 use amethyst_core::watch::VaultWatcher;
 use tauri::{AppHandle, Emitter, State};
@@ -146,6 +147,16 @@ fn note_outline(text: String) -> Vec<Heading> {
 #[tauri::command]
 fn note_block_offset(text: String, block: String) -> Option<usize> {
     block_offset(&text, &block)
+}
+
+#[tauri::command]
+fn note_properties(text: String) -> NoteProperties {
+    read_properties(&text)
+}
+
+#[tauri::command]
+fn note_apply_property(text: String, change: PropertyChange) -> String {
+    apply_property(&text, &change)
 }
 
 #[tauri::command]
@@ -293,6 +304,8 @@ pub fn run() {
             list_vault_notes,
             note_outline,
             note_block_offset,
+            note_properties,
+            note_apply_property,
             vault_backlinks,
             resolve_vault_wikilink,
             resolve_vault_embed,

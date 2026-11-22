@@ -1,5 +1,6 @@
 pub mod links;
 pub mod outline;
+pub mod properties;
 pub mod vault;
 pub mod watch;
 

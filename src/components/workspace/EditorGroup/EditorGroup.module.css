@@ -15,6 +15,21 @@
 }
 
 .body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.note {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.noteText {
   flex: 1;
   min-height: 0;
   overflow: hidden;

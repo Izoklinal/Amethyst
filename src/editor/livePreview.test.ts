@@ -9,6 +9,7 @@ import {
   calloutHeading,
   calloutLine,
   exitEmptyTask,
+  frontmatterFolds,
   markdownLinkAt,
   markdownLinkParts,
   previewDecorations,
@@ -38,7 +39,7 @@ function foldState(doc: string, anchor: number): EditorState {
   return EditorState.create({
     doc,
     selection: { anchor },
-    extensions: [markdown(), calloutFolds],
+    extensions: [markdown(), calloutFolds, frontmatterFolds],
   });
 }
 
@@ -235,6 +236,14 @@ test("a hash inside code is not treated as a heading mark", () => {
     hidden.some(([from, to]) => hash >= from && hash < to),
     false,
   );
+});
+
+test("frontmatter stays hidden until the cursor is inside it", () => {
+  const doc = "---\ntitle: Keep\n---\n# Hi\n";
+  const end = doc.indexOf("# Hi");
+  const inside = doc.indexOf("title");
+  assert.deepEqual(hiddenRanges(foldState(doc, end).field(frontmatterFolds)), [[0, end]]);
+  assert.deepEqual(hiddenRanges(foldState(doc, inside).field(frontmatterFolds)), []);
 });
 
 test("a trailing block id is replaced until the cursor is inside it", () => {

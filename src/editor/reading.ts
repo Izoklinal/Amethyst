@@ -1,7 +1,10 @@
 import { parser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
 import { embedLabel } from "./embed.ts";
+import { frontmatterRange } from "./frontmatter.ts";
 import { blockIdOnLine, calloutLine, taskOnLine, visibleWikilinkLabel } from "./livePreview.ts";
+
+export { frontmatterRange };
 
 export type Inline =
   | { kind: "text"; text: string }
@@ -33,21 +36,6 @@ export type ReadingItem = {
   task: { checked: boolean; at: number } | null;
   inlines: Inline[];
 };
-
-export function frontmatterRange(text: string): { from: number; to: number } | null {
-  if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) {
-    return null;
-  }
-  const newline = text.startsWith("---\r\n") ? "\r\n" : "\n";
-  const restFrom = 3 + newline.length;
-  const end = text.indexOf(`${newline}---`, restFrom);
-  if (end === -1) {
-    return null;
-  }
-  const to = end + newline.length + 3;
-  const after = text.slice(to, to + newline.length);
-  return { from: 0, to: after === newline ? to + newline.length : to };
-}
 
 /** A read-only structure of the note. It does not change the source text. */
 export function readDocument(text: string): ReadingBlock[] {
