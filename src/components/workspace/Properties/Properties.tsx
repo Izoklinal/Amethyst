@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import {
   noteApplyProperty,
   noteProperties,
@@ -7,18 +7,39 @@ import {
   type PropertyChange,
   type PropertyValue,
 } from "../../../api/vault";
+import { ContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu/ContextMenu";
+import {
+  CheckboxIcon,
+  CoordinatesIcon,
+  DateIcon,
+  ListIcon,
+  NumberIcon,
+  TagsIcon,
+  TextIcon,
+  UnknownIcon,
+} from "../../ui/icons";
 import styles from "./Properties.module.css";
 
 type PropertiesProps = {
   text: string;
   onChange: (text: string) => void;
+  inset?: boolean;
 };
 
-const TYPES: Array<PropertyValue["type"]> = ["text", "number", "boolean", "date", "list", "tags", "coordinates"];
+const TYPES: Array<Exclude<PropertyValue["type"], "unknown">> = [
+  "text",
+  "number",
+  "boolean",
+  "date",
+  "list",
+  "tags",
+  "coordinates",
+];
 
-export function Properties({ text, onChange }: PropertiesProps) {
+export function Properties({ text, onChange, inset = true }: PropertiesProps) {
   const [model, setModel] = useState<NoteProperties | null>(null);
   const [failed, setFailed] = useState(false);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const textRef = useRef(text);
   const chain = useRef(Promise.resolve());
   textRef.current = text;
@@ -60,7 +81,7 @@ export function Properties({ text, onChange }: PropertiesProps) {
   }
 
   return (
-    <section className={styles.properties} aria-label="Properties">
+    <section className={inset ? styles.properties : `${styles.properties} ${styles.flush}`} aria-label="Properties">
       <h2 className={styles.heading}>Properties</h2>
       {failed ? <p className={styles.note}>Properties could not be read.</p> : null}
       {model && !model.valid ? (
@@ -74,11 +95,25 @@ export function Properties({ text, onChange }: PropertiesProps) {
           <ul className={styles.list}>
             {model.properties.map((property) => (
               <li key={property.key} className={styles.row}>
-                <PropertyRow property={property} onChange={commit} />
+                <PropertyRow
+                  property={property}
+                  focusName={property.key === focusKey}
+                  onChange={commit}
+                />
               </li>
             ))}
           </ul>
-          <AddProperty onAdd={commit} />
+          <button
+            type="button"
+            className={styles.add}
+            onClick={() => {
+              const key = freshName(model.properties.map((property) => property.key));
+              setFocusKey(key);
+              commit({ kind: "add", key, value: { type: "text", value: "" } });
+            }}
+          >
+            Add property
+          </button>
         </>
       ) : null}
     </section>
@@ -87,42 +122,109 @@ export function Properties({ text, onChange }: PropertiesProps) {
 
 function PropertyRow({
   property,
+  focusName,
   onChange,
 }: {
   property: NoteProperty;
+  focusName: boolean;
   onChange: (change: PropertyChange) => void;
 }) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const unknown = property.value.type === "unknown";
+  const entries: ContextMenuEntry[] = unknown
+    ? [{ label: "Delete", shortcut: null }]
+    : [
+        {
+          label: "Property",
+          shortcut: null,
+          submenu: TYPES.map((type) => ({
+            label: typeLabel(type),
+            shortcut: null,
+            icon: <TypeIcon type={type} />,
+          })),
+        },
+        { label: "Delete", shortcut: null },
+      ];
   return (
     <>
-      {unknown ? (
-        <span className={styles.key}>{property.key}</span>
-      ) : (
-        <KeyField
-          name={property.key}
-          onRename={(to) => onChange({ kind: "rename", from: property.key, to })}
-        />
-      )}
-      <div className={styles.value}>
-        <ValueEditor
-          property={property}
-          onSet={(value) => onChange({ kind: "set", key: property.key, value })}
-        />
+      <div className={styles.identity}>
+        <button
+          type="button"
+          className={styles.typeButton}
+          aria-label={typeLabel(property.value.type)}
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            setMenu({ x: rect.left, y: rect.bottom });
+          }}
+        >
+          <TypeIcon type={property.value.type} />
+        </button>
+        {unknown ? (
+          <span className={styles.key}>{property.key}</span>
+        ) : (
+          <KeyField
+            name={property.key}
+            autoFocus={focusName}
+            onRename={(to) => onChange({ kind: "rename", from: property.key, to })}
+          />
+        )}
       </div>
-      <button type="button" className={styles.remove} onClick={() => onChange({ kind: "delete", key: property.key })}>
-        Remove
-      </button>
+      <div className={styles.value}>
+        <ValueEditor property={property} onSet={(value) => onChange({ kind: "set", key: property.key, value })} />
+      </div>
+      {menu ? (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          entries={entries}
+          onSelect={(index) => {
+            setMenu(null);
+            if (entries[index]?.label === "Delete") {
+              onChange({ kind: "delete", key: property.key });
+            }
+          }}
+          onSelectChild={(_index, childIndex) => {
+            setMenu(null);
+            const type = TYPES[childIndex];
+            if (!type) {
+              return;
+            }
+            const next = converted(property.value, type);
+            if (next) {
+              onChange({ kind: "set", key: property.key, value: next });
+            }
+          }}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
     </>
   );
 }
 
-function KeyField({ name, onRename }: { name: string; onRename: (next: string) => void }) {
+function KeyField({
+  name,
+  autoFocus,
+  onRename,
+}: {
+  name: string;
+  autoFocus: boolean;
+  onRename: (next: string) => void;
+}) {
   const [draft, setDraft] = useState(name);
+  const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     setDraft(name);
   }, [name]);
+  useEffect(() => {
+    if (!autoFocus) {
+      return;
+    }
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [autoFocus]);
   return (
     <input
+      ref={inputRef}
       className={styles.key}
       aria-label="Property name"
       value={draft}
@@ -149,28 +251,7 @@ function ValueEditor({
   if (value.type === "unknown") {
     return <pre className={styles.raw}>{value.value}</pre>;
   }
-  return (
-    <>
-      <select
-        className={styles.type}
-        aria-label={`Type of ${property.key}`}
-        value={value.type}
-        onChange={(event) => {
-          const next = converted(value, event.target.value as PropertyValue["type"]);
-          if (next) {
-            onSet(next);
-          }
-        }}
-      >
-        {TYPES.map((type) => (
-          <option key={type} value={type}>
-            {typeLabel(type)}
-          </option>
-        ))}
-      </select>
-      <ValueControl value={value} onSet={onSet} />
-    </>
-  );
+  return <ValueControl value={value} onSet={onSet} />;
 }
 
 function ValueControl({ value, onSet }: { value: PropertyValue; onSet: (value: PropertyValue) => void }) {
@@ -374,111 +455,118 @@ function CoordinateValue({
   );
 }
 
-function AddProperty({ onAdd }: { onAdd: (change: PropertyChange) => void }) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState<PropertyValue["type"]>("text");
-  return (
-    <form
-      className={styles.addRow}
-      onSubmit={(event) => {
-        event.preventDefault();
-        const key = name.trim();
-        if (!key || key !== name || key.includes(":") || key === "---") {
-          return;
-        }
-        onAdd({ kind: "add", key, value: emptyValue(type) });
-        setName("");
-        setType("text");
-      }}
-    >
-      <input
-        className={styles.key}
-        aria-label="New property name"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-      />
-      <select className={styles.type} aria-label="New property type" value={type} onChange={(event) => setType(event.target.value as PropertyValue["type"])}>
-        {TYPES.map((item) => (
-          <option key={item} value={item}>
-            {typeLabel(item)}
-          </option>
-        ))}
-      </select>
-      <button type="submit" className={styles.add}>
-        Add property
-      </button>
-    </form>
-  );
+function freshName(keys: string[]): string {
+  if (!keys.includes("property")) {
+    return "property";
+  }
+  let index = 2;
+  while (keys.includes(`property ${index}`)) {
+    index += 1;
+  }
+  return `property ${index}`;
 }
 
-function converted(value: PropertyValue, type: PropertyValue["type"]): PropertyValue | null {
-  if (value.type === type) {
-    return value;
+function TypeIcon({ type }: { type: PropertyValue["type"] }): ReactNode {
+  switch (type) {
+    case "text":
+      return <TextIcon />;
+    case "number":
+      return <NumberIcon />;
+    case "boolean":
+      return <CheckboxIcon />;
+    case "date":
+      return <DateIcon />;
+    case "list":
+      return <ListIcon />;
+    case "tags":
+      return <TagsIcon />;
+    case "coordinates":
+      return <CoordinatesIcon />;
+    case "unknown":
+      return <UnknownIcon />;
   }
+}
+
+function converted(value: PropertyValue, type: Exclude<PropertyValue["type"], "unknown">): PropertyValue | null {
   if (value.type === "unknown") {
     return null;
   }
+  if (value.type === type) {
+    return value;
+  }
   if (type === "text") {
-    if (value.type === "list" || value.type === "tags" || value.type === "coordinates") {
-      return null;
+    return { type: "text", value: textOf(value) };
+  }
+  if (type === "number") {
+    if (value.type === "text" && value.value.trim() && Number.isFinite(Number(value.value))) {
+      return { type: "number", value: Number(value.value) };
     }
-    if (value.type === "number") {
-      return { type: "text", value: String(value.value) };
+    return { type: "number", value: 0 };
+  }
+  if (type === "boolean") {
+    if (value.type === "text" && (value.value === "true" || value.value === "false")) {
+      return { type: "boolean", value: value.value === "true" };
     }
-    if (value.type === "boolean") {
-      return { type: "text", value: value.value ? "true" : "false" };
+    return { type: "boolean", value: false };
+  }
+  if (type === "date") {
+    if (value.type === "text" && /^\d{4}-\d{2}-\d{2}$/.test(value.value)) {
+      return { type: "date", value: value.value };
     }
     if (value.type === "date") {
-      return { type: "text", value: value.value };
+      return value;
     }
-    return { type: "text", value: value.value };
+    return { type: "date", value: today() };
   }
-  if (type === "number" && value.type === "text" && value.value.trim() && Number.isFinite(Number(value.value))) {
-    return { type: "number", value: Number(value.value) };
+  if (type === "list") {
+    if (value.type === "list" || value.type === "tags") {
+      return { type: "list", value: value.value };
+    }
+    if (value.type === "text" && value.value) {
+      return { type: "list", value: [value.value] };
+    }
+    return { type: "list", value: [] };
   }
-  if (type === "boolean" && value.type === "text" && (value.value === "true" || value.value === "false")) {
-    return { type: "boolean", value: value.value === "true" };
+  if (type === "tags") {
+    const strip = (item: string) => item.trim().replace(/^#/u, "");
+    if (value.type === "tags" || value.type === "list") {
+      return { type: "tags", value: value.value.map(strip) };
+    }
+    if (value.type === "text" && value.value) {
+      return { type: "tags", value: [strip(value.value)] };
+    }
+    return { type: "tags", value: [] };
   }
-  if (type === "date" && value.type === "text" && /^\d{4}-\d{2}-\d{2}$/.test(value.value)) {
-    return { type: "date", value: value.value };
+  if (value.type === "coordinates") {
+    return value;
   }
-  if (type === "list" && (value.type === "list" || value.type === "tags")) {
-    return { type: "list", value: value.value };
-  }
-  if (type === "list" && value.type === "text") {
-    return { type: "list", value: value.value ? [value.value] : [] };
-  }
-  if (type === "tags" && (value.type === "tags" || value.type === "list")) {
-    return { type: "tags", value: value.value.map((item) => item.trim().replace(/^#/u, "")) };
-  }
-  if (type === "tags" && value.type === "text") {
-    return { type: "tags", value: value.value ? [value.value.trim().replace(/^#/u, "")] : [] };
-  }
-  return null;
+  return { type: "coordinates", value: { lat: 0, lng: 0 } };
 }
 
-function emptyValue(type: PropertyValue["type"]): PropertyValue {
+function textOf(value: PropertyValue): string {
+  switch (value.type) {
+    case "text":
+    case "date":
+      return value.value;
+    case "number":
+      return String(value.value);
+    case "boolean":
+      return value.value ? "true" : "false";
+    case "list":
+    case "tags":
+      return value.value.join(", ");
+    case "coordinates":
+      return `${value.value.lat}, ${value.value.lng}`;
+    case "unknown":
+      return "";
+  }
+}
+
+function today(): string {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-  switch (type) {
-    case "text":
-      return { type: "text", value: "" };
-    case "number":
-      return { type: "number", value: 0 };
-    case "boolean":
-      return { type: "boolean", value: false };
-    case "date":
-      return { type: "date", value: `${now.getFullYear()}-${month}-${day}` };
-    case "list":
-      return { type: "list", value: [] };
-    case "tags":
-      return { type: "tags", value: [] };
-    case "coordinates":
-      return { type: "coordinates", value: { lat: 0, lng: 0 } };
-    case "unknown":
-      return { type: "text", value: "" };
-  }
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 function typeLabel(type: PropertyValue["type"]): string {

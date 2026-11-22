@@ -325,12 +325,17 @@ export const frontmatterFolds = StateField.define<DecorationSet>({
 
 function frontmatterDecorations(state: EditorState): DecorationSet {
   const span = frontmatterRange(state.doc.toString());
-  if (!span || editingFrontmatter(state, span.from, span.to)) {
+  if (!span) {
+    return Decoration.set([
+      Decoration.widget({ widget: propertiesHostWidget, block: true, side: -1 }).range(0),
+    ]);
+  }
+  if (editingFrontmatter(state, span.from, span.to)) {
     return Decoration.none;
   }
-  const builder = new RangeSetBuilder<Decoration>();
-  builder.add(span.from, span.to, Decoration.replace({}));
-  return builder.finish();
+  return Decoration.set([
+    Decoration.replace({ widget: propertiesHostWidget, block: true }).range(span.from, span.to),
+  ]);
 }
 
 function editingFrontmatter(state: EditorState, from: number, to: number): boolean {
@@ -406,8 +411,12 @@ function buildPreview(state: EditorState): DecorationSet {
   const pieces: Piece[] = [];
   const folds = foldedCalloutRanges(state);
   const lineClasses = new Map<number, string[]>();
+  const frontmatter = frontmatterRange(state.doc.toString());
   tree.iterate({
     enter(node) {
+      if (frontmatter && node.from >= frontmatter.from && node.to <= frontmatter.to) {
+        return false;
+      }
       if (BLOCK_CODE_NODES.has(node.name)) {
         return false;
       }
@@ -570,6 +579,36 @@ let embedLoader: EmbedLoader | null = null;
 export function setEmbedLoader(loader: EmbedLoader | null) {
   embedLoader = loader;
 }
+
+let propertiesHostListener: ((host: HTMLElement | null) => void) | null = null;
+
+/** The editor calls this so the properties block can render inside the document. */
+export function setPropertiesHost(listener: ((host: HTMLElement | null) => void) | null) {
+  propertiesHostListener = listener;
+}
+
+class PropertiesHostWidget extends WidgetType {
+  toDOM(): HTMLElement {
+    const host = document.createElement("div");
+    host.className = "cm-properties-host";
+    propertiesHostListener?.(host);
+    return host;
+  }
+
+  destroy(): void {
+    propertiesHostListener?.(null);
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+
+  eq(): boolean {
+    return true;
+  }
+}
+
+const propertiesHostWidget = new PropertiesHostWidget();
 
 class EmbedWidget extends WidgetType {
   body: string;

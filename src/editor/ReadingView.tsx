@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { Properties } from "../components/workspace/Properties/Properties";
 import { calloutHeading, type EmbedLoader, type EmbedPaint } from "./livePreview";
 import { readDocument, type Inline, type ReadingBlock, type ReadingItem } from "./reading";
 import styles from "./ReadingView.module.css";
 
 type ReadingViewProps = {
   text: string;
+  onChange: (text: string) => void;
   onToggleTask: (offset: number) => void;
   onOpenLink: (url: string) => void;
   onFollowWikilink: (offset: number) => void;
@@ -15,6 +17,7 @@ type ReadingViewProps = {
 
 export function ReadingView({
   text,
+  onChange,
   onToggleTask,
   onOpenLink,
   onFollowWikilink,
@@ -25,6 +28,7 @@ export function ReadingView({
   const blocks = useMemo(() => readDocument(text), [text]);
   return (
     <div className={styles.reading} id="note-reading" tabIndex={-1}>
+      <Properties text={text} onChange={onChange} inset={false} />
       {blocks.map((block, index) => (
         <Block
           key={index}
@@ -41,7 +45,7 @@ export function ReadingView({
   );
 }
 
-function Block(props: { block: ReadingBlock } & Omit<ReadingViewProps, "text">) {
+function Block(props: { block: ReadingBlock } & Omit<ReadingViewProps, "text" | "onChange">) {
   const { block } = props;
   if (block.kind === "frontmatter") {
     return null;
@@ -110,7 +114,7 @@ function Block(props: { block: ReadingBlock } & Omit<ReadingViewProps, "text">) 
   );
 }
 
-function Item({ item, ...props }: { item: ReadingItem } & Omit<ReadingViewProps, "text">) {
+function Item({ item, ...props }: { item: ReadingItem } & Omit<ReadingViewProps, "text" | "onChange">) {
   return (
     <>
       {item.task ? (
@@ -127,7 +131,7 @@ function Item({ item, ...props }: { item: ReadingItem } & Omit<ReadingViewProps,
   );
 }
 
-function Inlines({ inlines, ...props }: { inlines: Inline[] } & Omit<ReadingViewProps, "text">) {
+function Inlines({ inlines, ...props }: { inlines: Inline[] } & Omit<ReadingViewProps, "text" | "onChange">) {
   return (
     <>
       {inlines.map((inline, index) => {

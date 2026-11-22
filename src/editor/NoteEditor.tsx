@@ -2,9 +2,11 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Properties } from "../components/workspace/Properties/Properties";
 import type { EmbedLoader } from "./livePreview";
-import { exitEmptyTask, livePreview, setEmbedLoader } from "./livePreview";
+import { exitEmptyTask, livePreview, setEmbedLoader, setPropertiesHost } from "./livePreview";
 import { frontmatterRange } from "./frontmatter.ts";
 
 function initialAnchor(text: string, source: boolean): number {
@@ -44,6 +46,7 @@ type NoteEditorProps = {
   onToggleCallout: (offset: number) => void;
   loadEmbed: EmbedLoader;
   source: boolean;
+  reading: boolean;
 };
 
 const previewCompartment = new Compartment();
@@ -73,6 +76,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
     onToggleCallout,
     loadEmbed,
     source,
+    reading,
   },
   ref,
 ) {
@@ -88,6 +92,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
   const syncing = useRef(false);
   const initialText = useRef(text);
   const sourceRef = useRef(source);
+  const [propertiesHost, setPropertiesElement] = useState<HTMLElement | null>(null);
   sourceRef.current = source;
   onChangeRef.current = onChange;
   onFollowRef.current = onFollowLink;
@@ -103,6 +108,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
     if (!parent) {
       return;
     }
+    setPropertiesHost((element) => setPropertiesElement(element));
     const view = new EditorView({
       parent,
       state: EditorState.create({
@@ -193,6 +199,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
     viewRef.current = view;
     return () => {
       setEmbedLoader(null);
+      setPropertiesHost(null);
+      setPropertiesElement(null);
       view.destroy();
       viewRef.current = null;
     };
@@ -279,6 +287,10 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
         event.stopPropagation();
         onContextMenu(event.clientX, event.clientY);
       }}
-    />
+    >
+      {propertiesHost && !source && !reading
+        ? createPortal(<Properties text={text} onChange={onChange} />, propertiesHost)
+        : null}
+    </div>
   );
 });

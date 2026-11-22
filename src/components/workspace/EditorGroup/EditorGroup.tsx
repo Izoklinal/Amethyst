@@ -6,7 +6,6 @@ import type { EditorGroup as EditorGroupModel } from "../../../workspace/editorG
 import { IconButton } from "../../ui/IconButton/IconButton";
 import { CheckIcon, CloseIcon, DiscardIcon } from "../../ui/icons";
 import { EditorTab } from "../EditorTab/EditorTab";
-import { Properties } from "../Properties/Properties";
 import styles from "./EditorGroup.module.css";
 
 type EditorGroupProps = {
@@ -91,7 +90,6 @@ export function EditorGroup({
           <p className={styles.empty}>No note open.</p>
         ) : (
           <div className={styles.note}>
-            {source ? null : <Properties text={text} onChange={onChange} />}
             <div className={styles.noteText}>
               <div className={reading ? styles.editorHidden : styles.editor}>
                 <NoteEditor
@@ -107,11 +105,13 @@ export function EditorGroup({
                   onToggleCallout={onToggleCallout}
                   loadEmbed={loadEmbed}
                   source={source}
+                  reading={reading}
                 />
               </div>
               {reading ? (
                 <ReadingView
                   text={text}
+                  onChange={onChange}
                   onToggleTask={onToggleTask}
                   onOpenLink={onOpenLink}
                   onFollowWikilink={onFollowWikilink}

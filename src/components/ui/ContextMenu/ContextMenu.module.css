@@ -12,11 +12,43 @@
   user-select: none;
 }
 
+.entry {
+  position: relative;
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  min-width: 0;
+}
+
+.submenu {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  margin: 0;
+  padding: var(--spacing-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+}
+
+.submenuFlip {
+  left: auto;
+  right: 100%;
+}
+
 .item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-4);
+  width: 100%;
   padding: var(--spacing-1) var(--spacing-2);
   border: 0;
   border-radius: var(--radius-medium);

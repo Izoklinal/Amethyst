@@ -246,6 +246,29 @@ test("frontmatter stays hidden until the cursor is inside it", () => {
   assert.deepEqual(hiddenRanges(foldState(doc, inside).field(frontmatterFolds)), []);
 });
 
+test("frontmatter text is not styled as a heading", () => {
+  const doc = "---\ntitle: Keep\n---\n# Hi\n";
+  const decorations = previewDecorations(stateFor(doc, 0));
+  const closing = doc.lastIndexOf("---");
+  const title = doc.indexOf("title");
+  const headingMark = doc.indexOf("# Hi");
+  assert.equal(
+    hiddenRanges(decorations).some(([from, to]) => closing >= from && closing < to),
+    false,
+  );
+  let titled = false;
+  decorations.between(title, title, (_from, _to, decoration) => {
+    if (String(decoration.spec.class ?? "").includes("cm-heading")) {
+      titled = true;
+    }
+  });
+  assert.equal(titled, false);
+  assert.equal(
+    hiddenRanges(decorations).some(([from]) => from === headingMark),
+    true,
+  );
+});
+
 test("a trailing block id is replaced until the cursor is inside it", () => {
   const doc = "текст ^идея\n\nдальше";
   const from = doc.indexOf("^");

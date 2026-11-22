@@ -51,6 +51,10 @@
   display: none;
 }
 
+.editor :global(.cm-properties-host) {
+  display: block;
+}
+
 .editor :global(.note-editor-host) {
   height: 100%;
 }
