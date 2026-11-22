@@ -7,7 +7,7 @@ import {
   type ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
-import { RangeSetBuilder, type EditorState, type Extension } from "@codemirror/state";
+import { RangeSetBuilder, StateField, type EditorState, type Extension } from "@codemirror/state";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
 import { embedLabel } from "./embed.ts";
 
@@ -72,6 +72,58 @@ class TaskWidget extends WidgetType {
   }
 }
 
+/** Enter on an empty task line removes the marker and leaves the cursor there. */
+export function exitEmptyTask({
+  state,
+  dispatch,
+}: {
+  state: EditorState;
+  dispatch: (transaction: ReturnType<EditorState["update"]>) => void;
+}): boolean {
+  const range = state.selection.main;
+  if (!range.empty) {
+    return false;
+  }
+  const line = state.doc.lineAt(range.from);
+  const task = taskOnLine(line.text);
+  if (!task || line.text.slice(task.to).trim() !== "") {
+    return false;
+  }
+  const from = line.from + task.from;
+  dispatch(
+    state.update({
+      changes: { from, to: line.to, insert: "" },
+      selection: { anchor: from },
+      userEvent: "input",
+    }),
+  );
+  return true;
+}
+
+/** A block id at the end of a line, or null. Offsets are within the line and cover `^` plus the id. */
+export function blockIdOnLine(line: string): { from: number; to: number; id: string } | null {
+  let end = line.length;
+  while (end > 0 && (line[end - 1] === " " || line[end - 1] === "\t")) {
+    end -= 1;
+  }
+  if (end === 0) {
+    return null;
+  }
+  let token = end;
+  while (token > 0 && line[token - 1] !== " " && line[token - 1] !== "\t") {
+    token -= 1;
+  }
+  const caret = line.lastIndexOf("^", end - 1);
+  if (caret < token || caret >= end - 1) {
+    return null;
+  }
+  const id = line.slice(caret + 1, end);
+  if (id.length === 0 || /\s/u.test(id)) {
+    return null;
+  }
+  return { from: caret, to: end, id };
+}
+
 /** A `- [ ]` / `- [x]` marker at the start of a line, or null. Offsets are within the line. */
 export function taskOnLine(line: string): {
   from: number;
@@ -106,8 +158,8 @@ class WikilinkWidget extends WidgetType {
     return link;
   }
 
-  ignoreEvent(): boolean {
-    return true;
+  ignoreEvent(event: Event): boolean {
+    return event.type !== "mousedown";
   }
 
   eq(other: WidgetType): boolean {
@@ -116,6 +168,33 @@ class WikilinkWidget extends WidgetType {
       other.label === this.label &&
       other.linkFrom === this.linkFrom
     );
+  }
+}
+
+class BlockIdWidget extends WidgetType {
+  id: string;
+  from: number;
+
+  constructor(id: string, from: number) {
+    super();
+    this.id = id;
+    this.from = from;
+  }
+
+  toDOM(): HTMLElement {
+    const mark = document.createElement("span");
+    mark.className = "cm-block-id";
+    mark.textContent = this.id;
+    mark.dataset.blockFrom = String(this.from);
+    return mark;
+  }
+
+  ignoreEvent(event: Event): boolean {
+    return event.type !== "mousedown";
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof BlockIdWidget && other.id === this.id && other.from === this.from;
   }
 }
 
@@ -137,8 +216,8 @@ class MarkdownLinkWidget extends WidgetType {
     return link;
   }
 
-  ignoreEvent(): boolean {
-    return true;
+  ignoreEvent(event: Event): boolean {
+    return event.type !== "mousedown";
   }
 
   eq(other: WidgetType): boolean {
@@ -146,6 +225,23 @@ class MarkdownLinkWidget extends WidgetType {
       other instanceof MarkdownLinkWidget && other.label === this.label && other.url === this.url
     );
   }
+}
+
+/** The Markdown link containing `offset`, or null. A wikilink is not a match. */
+export function markdownLinkAt(text: string, offset: number): { label: string; url: string } | null {
+  const pattern = /\[([^\]\n]+)\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
+  for (const match of text.matchAll(pattern)) {
+    const from = match.index ?? 0;
+    const to = from + match[0].length;
+    if (offset >= from && offset <= to) {
+      const label = match[1] ?? "";
+      const url = match[2] ?? "";
+      if (label.trim() && url) {
+        return { label, url };
+      }
+    }
+  }
+  return null;
 }
 
 /** Label and address of `[label](url)`, or null when the source is not that link. */
@@ -188,27 +284,90 @@ export function visibleWikilinkLabel(source: string): string | null {
 }
 
 export function livePreview(): Extension {
-  return ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
+  return [
+    ViewPlugin.fromClass(
+      class {
+        decorations: DecorationSet;
 
-      constructor(view: EditorView) {
-        this.decorations = previewDecorations(view.state);
-      }
-
-      update(update: ViewUpdate) {
-        if (update.docChanged || update.selectionSet) {
-          this.decorations = previewDecorations(update.state);
+        constructor(view: EditorView) {
+          this.decorations = buildPreview(view.state);
         }
-      }
-    },
-    { decorations: (plugin) => plugin.decorations },
-  );
+
+        update(update: ViewUpdate) {
+          if (update.docChanged || update.selectionSet) {
+            this.decorations = buildPreview(update.state);
+          }
+        }
+      },
+      { decorations: (value) => value.decorations },
+    ),
+    calloutFolds,
+  ];
 }
 
+/** Hidden callout bodies. A direct decoration set, so it may cover line breaks. */
+export const calloutFolds = StateField.define<DecorationSet>({
+  create(state) {
+    return foldDecorations(state);
+  },
+  update(folded, transaction) {
+    if (transaction.docChanged || transaction.selection) {
+      return foldDecorations(transaction.state);
+    }
+    return folded;
+  },
+  provide(field) {
+    return [
+      EditorView.decorations.from(field),
+      EditorView.atomicRanges.of((view) => view.state.field(field)),
+    ];
+  },
+});
+
 export function previewDecorations(state: EditorState): DecorationSet {
+  return buildPreview(state);
+}
+
+function foldDecorations(state: EditorState): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const fold of foldedCalloutRanges(state)) {
+    builder.add(fold.from, fold.to, Decoration.replace({}));
+  }
+  return builder.finish();
+}
+
+function foldedCalloutRanges(state: EditorState): Array<{ from: number; to: number }> {
+  const tree = ensureSyntaxTree(state, state.doc.length) ?? syntaxTree(state);
+  const folds: Array<{ from: number; to: number }> = [];
+  tree.iterate({
+    enter(node) {
+      if (BLOCK_CODE_NODES.has(node.name)) {
+        return false;
+      }
+      if (node.name !== "Blockquote") {
+        return undefined;
+      }
+      const first = state.doc.lineAt(node.from);
+      const parsed = calloutLine(first.text);
+      if (!parsed || parsed.fold !== "-" || insideCode(state, node.from)) {
+        return false;
+      }
+      const end = state.doc.lineAt(Math.max(node.from, node.to - 1));
+      const bodyTo = calloutBodyEnd(state, first.number, end.number, node.to);
+      if (bodyTo > first.to) {
+        folds.push({ from: first.to, to: bodyTo });
+      }
+      return false;
+    },
+  });
+  folds.sort((left, right) => left.from - right.from || left.to - right.to);
+  return folds;
+}
+
+function buildPreview(state: EditorState): DecorationSet {
   const tree = ensureSyntaxTree(state, state.doc.length) ?? syntaxTree(state);
   const pieces: Piece[] = [];
+  const folds = foldedCalloutRanges(state);
   const lineClasses = new Map<number, string[]>();
   tree.iterate({
     enter(node) {
@@ -247,6 +406,7 @@ export function previewDecorations(state: EditorState): DecorationSet {
   decorateWikilinks(state, pieces);
   decorateEmbeds(state, pieces);
   decorateTasks(state, pieces);
+  decorateBlockIds(state, pieces);
   for (const [from, classes] of lineClasses) {
     pieces.push({
       from,
@@ -265,6 +425,9 @@ export function previewDecorations(state: EditorState): DecorationSet {
     (piece) =>
       !links.some(
         (link) => piece !== link && piece.from >= link.from && piece.to <= link.to,
+      ) &&
+      !folds.some(
+        (fold) => piece.from < fold.to && piece.to > fold.from && (piece.from !== fold.from || piece.to !== fold.to),
       ),
   );
   visible.sort((left, right) => left.from - right.from || left.to - right.to);
@@ -492,6 +655,37 @@ function insideCode(state: EditorState, position: number): boolean {
   return false;
 }
 
+function decorateBlockIds(state: EditorState, pieces: Piece[]) {
+  for (let number = 1; number <= state.doc.lines; number += 1) {
+    const line = state.doc.line(number);
+    const block = blockIdOnLine(line.text);
+    if (
+      !block ||
+      insideWikilink(line.text, block.from) ||
+      overlaps(state, line.from + block.from, line.from + block.to) ||
+      insideCode(state, line.from + block.from)
+    ) {
+      continue;
+    }
+    pieces.push({
+      from: line.from + block.from,
+      to: line.from + block.to,
+      decoration: Decoration.replace({
+        widget: new BlockIdWidget(block.id, line.from + block.from),
+      }),
+    });
+  }
+}
+
+function insideWikilink(line: string, index: number): boolean {
+  const open = line.lastIndexOf("[[", index);
+  if (open === -1) {
+    return false;
+  }
+  const close = line.indexOf("]]", open + 2);
+  return close !== -1 && index < close + 2;
+}
+
 function decorateTasks(state: EditorState, pieces: Piece[]) {
   for (let number = 1; number <= state.doc.lines; number += 1) {
     const line = state.doc.line(number);
@@ -531,6 +725,11 @@ export function calloutLine(line: string): {
   };
 }
 
+/** Visible heading: the written title, or the type when the title is empty. */
+export function calloutHeading(type: string, title: string): string {
+  return title || type;
+}
+
 class CalloutWidget extends WidgetType {
   type: string;
   title: string;
@@ -547,7 +746,7 @@ class CalloutWidget extends WidgetType {
     const label = document.createElement("span");
     label.className = "cm-callout-label";
     label.dataset.calloutAt = String(this.brace);
-    label.textContent = this.title ? `${this.type} ${this.title}` : this.type;
+    label.textContent = calloutHeading(this.type, this.title);
     return label;
   }
 
@@ -565,6 +764,19 @@ class CalloutWidget extends WidgetType {
   }
 }
 
+/** End of the last `>` line after the title. Lazy continuation stays outside the fold. */
+function calloutBodyEnd(state: EditorState, firstNumber: number, endNumber: number, nodeTo: number): number {
+  let end = state.doc.line(firstNumber).to;
+  for (let number = firstNumber + 1; number <= endNumber; number += 1) {
+    const line = state.doc.line(number);
+    if (line.from >= nodeTo || !/^\s*>/.test(line.text)) {
+      break;
+    }
+    end = line.to;
+  }
+  return end;
+}
+
 function decorateCallout(
   state: EditorState,
   node: SyntaxNodeRef,
@@ -577,9 +789,23 @@ function decorateCallout(
     return false;
   }
   const end = state.doc.lineAt(Math.max(node.from, node.to - 1));
-  const active = overlaps(state, first.from, end.to);
   const type = parsed.type.toLowerCase();
   const variant = CALLOUT_TYPES.has(type) ? type : "default";
+  if (parsed.fold === "-") {
+    addLineClass(lineClasses, first.from, "cm-callout");
+    addLineClass(lineClasses, first.from, `cm-callout-${variant}`);
+    if (!overlaps(state, first.from, first.to)) {
+      pieces.push({
+        from: first.from,
+        to: first.from + first.text.length,
+        decoration: Decoration.replace({
+          widget: new CalloutWidget(parsed.type, parsed.title, first.from + parsed.brace),
+        }),
+      });
+    }
+    return true;
+  }
+  const active = overlaps(state, first.from, end.to);
   for (let number = first.number; number <= end.number; number += 1) {
     const line = state.doc.line(number);
     if (line.from < node.from || line.from >= node.to) {
@@ -598,16 +824,6 @@ function decorateCallout(
       widget: new CalloutWidget(parsed.type, parsed.title, first.from + parsed.brace),
     }),
   });
-  if (parsed.fold === "-") {
-    if (first.to < node.to) {
-      pieces.push({
-        from: first.to,
-        to: node.to,
-        decoration: Decoration.replace({}),
-      });
-    }
-    return true;
-  }
   for (let number = first.number + 1; number <= end.number; number += 1) {
     const line = state.doc.line(number);
     const mark = line.text.indexOf(">");

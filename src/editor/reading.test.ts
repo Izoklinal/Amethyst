@@ -56,3 +56,21 @@ test("reading keeps frontmatter, headings, tasks, links, embeds and callouts", (
     true,
   );
 });
+
+test("a trailing block id is a separate label", () => {
+  const blocks = readDocument("текст ^идея\n\n# Title ^idea\n");
+  const paragraph = blocks.find((block) => block.kind === "paragraph");
+  assert.ok(paragraph && paragraph.kind === "paragraph");
+  if (paragraph?.kind === "paragraph") {
+    assert.deepEqual(paragraph.inlines, [
+      { kind: "text", text: "текст" },
+      { kind: "blockId", id: "идея" },
+    ]);
+  }
+  const heading = blocks.find((block) => block.kind === "heading");
+  assert.ok(heading && heading.kind === "heading");
+  if (heading?.kind === "heading") {
+    assert.equal(heading.text, "Title");
+    assert.equal(heading.blockId, "idea");
+  }
+});

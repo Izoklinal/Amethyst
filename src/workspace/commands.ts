@@ -38,6 +38,7 @@ export type CommandActions = {
   openEmbed: () => void;
   toggleCallout: () => void;
   toggleReading: () => void;
+  toggleSource: () => void;
   revealHeading: () => void;
   cutNote: () => void;
   copyNote: () => void;
@@ -72,6 +73,7 @@ export function createCommands(actions: CommandActions): Command[] {
     { id: "note.openEmbed", title: "Open Embed", run: actions.openEmbed },
     { id: "note.toggleCallout", title: "Toggle Callout", run: actions.toggleCallout },
     { id: "note.toggleReading", title: "Toggle Reading Mode", run: actions.toggleReading },
+    { id: "note.toggleSource", title: "Toggle Source Mode", run: actions.toggleSource },
     { id: "note.revealHeading", title: "Reveal Heading", run: actions.revealHeading },
     { id: "note.cut", title: "Cut", run: actions.cutNote },
     { id: "note.copy", title: "Copy", run: actions.copyNote },

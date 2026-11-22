@@ -172,6 +172,13 @@
   max-width: 100%;
 }
 
+.editor :global(.cm-block-id) {
+  margin-left: var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
 .editor :global(.cm-wikilink),
 .editor :global(.cm-md-link) {
   color: var(--color-accent);

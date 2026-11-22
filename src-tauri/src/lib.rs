@@ -2,8 +2,8 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use amethyst_core::links::{
-    backlinks_to, resolve_editor_link, resolve_embed, Backlink, OpenNote, ResolvedEmbed,
-    ResolvedLink,
+    backlinks_to, block_offset, resolve_editor_link, resolve_embed, Backlink, OpenNote,
+    ResolvedEmbed, ResolvedLink,
 };
 use amethyst_core::outline::{outline_of, Heading};
 use amethyst_core::vault::{DirectoryEntry, NoteMatch, Vault, VaultError, VaultInfo};
@@ -141,6 +141,11 @@ fn list_vault_notes(session: State<VaultSession>) -> Result<Vec<NoteMatch>, Stri
 #[tauri::command]
 fn note_outline(text: String) -> Vec<Heading> {
     outline_of(&text)
+}
+
+#[tauri::command]
+fn note_block_offset(text: String, block: String) -> Option<usize> {
+    block_offset(&text, &block)
 }
 
 #[tauri::command]
@@ -287,6 +292,7 @@ pub fn run() {
             trash_vault_entry,
             list_vault_notes,
             note_outline,
+            note_block_offset,
             vault_backlinks,
             resolve_vault_wikilink,
             resolve_vault_embed,

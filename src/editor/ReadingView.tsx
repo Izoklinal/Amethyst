@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { EmbedLoader, EmbedPaint } from "./livePreview";
+import { calloutHeading, type EmbedLoader, type EmbedPaint } from "./livePreview";
 import { readDocument, type Inline, type ReadingBlock, type ReadingItem } from "./reading";
 import styles from "./ReadingView.module.css";
 
@@ -48,7 +48,12 @@ function Block(props: { block: ReadingBlock } & Omit<ReadingViewProps, "text">) 
   }
   if (block.kind === "heading") {
     const Tag = `h${block.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
-    return <Tag className={styles.heading}>{block.text}</Tag>;
+    return (
+      <Tag className={styles.heading}>
+        {block.text}
+        {block.blockId ? <span className={styles.blockId}>{block.blockId}</span> : null}
+      </Tag>
+    );
   }
   if (block.kind === "code") {
     return <pre className={styles.code}>{block.text}</pre>;
@@ -96,7 +101,7 @@ function Block(props: { block: ReadingBlock } & Omit<ReadingViewProps, "text">) 
   return (
     <aside className={tone ? `${styles.callout} ${tone}` : styles.callout}>
       <button type="button" className={styles.calloutTitle} onClick={() => props.onToggleCallout(block.brace)}>
-        {block.title ? `${block.type} ${block.title}` : block.type}
+        {calloutHeading(block.type, block.title)}
       </button>
       {block.blocks.map((child, index) => (
         <Block key={index} {...props} block={child} />
@@ -147,6 +152,13 @@ function Inlines({ inlines, ...props }: { inlines: Inline[] } & Omit<ReadingView
             <button key={index} type="button" className={styles.link} onClick={() => props.onOpenLink(inline.url)}>
               {inline.label}
             </button>
+          );
+        }
+        if (inline.kind === "blockId") {
+          return (
+            <span key={index} className={styles.blockId}>
+              {inline.id}
+            </span>
           );
         }
         if (inline.kind === "wikilink") {

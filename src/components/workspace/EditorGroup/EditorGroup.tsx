@@ -27,6 +27,7 @@ type EditorGroupProps = {
   onToggleCallout: (offset: number) => void;
   loadEmbed: EmbedLoader;
   reading: boolean;
+  source: boolean;
   onFollowWikilink: (offset: number) => void;
   editorRef: Ref<NoteEditorHandle>;
 };
@@ -50,6 +51,7 @@ export function EditorGroup({
   onToggleCallout,
   loadEmbed,
   reading,
+  source,
   onFollowWikilink,
   editorRef,
 }: EditorGroupProps) {
@@ -100,6 +102,7 @@ export function EditorGroup({
               onOpenEmbed={onOpenEmbed}
               onToggleCallout={onToggleCallout}
               loadEmbed={loadEmbed}
+              source={source}
             />
           </div>
         )}

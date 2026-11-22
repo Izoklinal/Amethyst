@@ -50,16 +50,19 @@ pub struct OpenNote {
 pub struct ResolvedLink {
     pub path: String,
     pub heading: Option<String>,
+    pub block: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Wikilink {
     SameNote {
         heading: Option<String>,
+        block: Option<String>,
     },
     Note {
         file: String,
         heading: Option<String>,
+        block: Option<String>,
     },
 }
 
@@ -74,17 +77,18 @@ pub fn resolve_editor_link(
     offset: usize,
 ) -> Result<ResolvedLink, LinkError> {
     let link = wikilink_at(text, offset).ok_or(LinkError::NoLink)?;
-    let (file, heading) = match link {
-        Wikilink::SameNote { heading } => {
-            let Some(heading) = heading else {
+    let (file, heading, block) = match link {
+        Wikilink::SameNote { heading, block } => {
+            if heading.is_none() && block.is_none() {
                 return Err(LinkError::SameNote);
-            };
+            }
             return Ok(ResolvedLink {
                 path: source.replace('\\', "/"),
-                heading: Some(heading),
+                heading,
+                block,
             });
         }
-        Wikilink::Note { file, heading } => (file, heading),
+        Wikilink::Note { file, heading, block } => (file, heading, block),
     };
     if is_attachment(&file) {
         return Err(LinkError::NotANote);
@@ -95,7 +99,44 @@ pub fn resolve_editor_link(
     } else {
         resolve_name(&files, source, &file)?
     };
-    Ok(ResolvedLink { path, heading })
+    Ok(ResolvedLink { path, heading, block })
+}
+
+/// UTF-16 offset of `^id` on a line outside code, or none.
+pub fn block_offset(text: &str, id: &str) -> Option<usize> {
+    if id.is_empty() || id.chars().any(char::is_whitespace) {
+        return None;
+    }
+    let units = code_units(text);
+    let mut start = 0;
+    let mut index = 0;
+    while index <= units.len() {
+        let at_end = index == units.len() || units[index].ch == '\n';
+        if at_end {
+            if let Some(offset) = block_on_line(&units[start..index], id) {
+                return Some(offset);
+            }
+            start = index + 1;
+        }
+        index += 1;
+    }
+    None
+}
+
+fn block_on_line(line: &[Unit], id: &str) -> Option<usize> {
+    let end = line
+        .iter()
+        .rposition(|unit| unit.ch != ' ' && unit.ch != '\t')?;
+    let id_len = id.chars().count();
+    let mark = end.checked_sub(id_len)?;
+    if line[mark].ch != '^' || line[mark].code {
+        return None;
+    }
+    let matched = line[mark + 1..=end]
+        .iter()
+        .map(|unit| unit.ch)
+        .eq(id.chars());
+    if matched { Some(line[mark].utf16) } else { None }
 }
 
 /// What an embed displays. A file that is not a note or an image is named only.
@@ -355,7 +396,7 @@ fn find_wikilinks(text: &str) -> Vec<FoundLink> {
 fn wikilink_at(text: &str, offset: usize) -> Option<Wikilink> {
     find_wikilinks(text)
         .into_iter()
-        .find(|link| offset > link.from && offset <= link.to)
+        .find(|link| offset >= link.from && offset <= link.to)
         .map(|link| link.link)
 }
 
@@ -364,25 +405,32 @@ fn classify(body: &str) -> Option<Wikilink> {
     if target.is_empty() {
         return None;
     }
-    let (file_and_block, heading) = match target.split_once('#') {
+    let (path_and_heading, block) = split_block_id(target);
+    let (file, heading) = match path_and_heading.split_once('#') {
         Some((file, rest)) => (file, heading_text(rest)),
-        None => (target, None),
+        None => (path_and_heading.as_str(), None),
     };
-    let file = file_and_block
-        .split('^')
-        .next()
-        .unwrap_or("")
-        .trim()
-        .replace('\\', "/");
+    let file = file.trim().replace('\\', "/");
     if file.is_empty() {
-        Some(Wikilink::SameNote { heading })
+        Some(Wikilink::SameNote { heading, block })
     } else {
-        Some(Wikilink::Note { file, heading })
+        Some(Wikilink::Note { file, heading, block })
     }
 }
 
+fn split_block_id(target: &str) -> (String, Option<String>) {
+    let Some((left, id)) = target.rsplit_once('^') else {
+        return (target.to_string(), None);
+    };
+    let id = id.trim();
+    if id.is_empty() || id.chars().any(char::is_whitespace) {
+        return (target.to_string(), None);
+    }
+    (left.trim().to_string(), Some(id.to_string()))
+}
+
 fn heading_text(rest: &str) -> Option<String> {
-    let heading = rest.split('^').next().unwrap_or("").trim();
+    let heading = rest.trim();
     if heading.is_empty() {
         None
     } else {
@@ -714,6 +762,7 @@ mod tests {
             Some(Wikilink::Note {
                 file: "Note".to_string(),
                 heading: None,
+                block: None,
             })
         );
         assert_eq!(
@@ -721,6 +770,7 @@ mod tests {
             Some(Wikilink::Note {
                 file: "Folder/Other".to_string(),
                 heading: Some("Head".to_string()),
+                block: Some("block".to_string()),
             })
         );
         assert_eq!(
@@ -728,6 +778,7 @@ mod tests {
             Some(Wikilink::Note {
                 file: "Embed".to_string(),
                 heading: None,
+                block: None,
             })
         );
     }
@@ -739,8 +790,20 @@ mod tests {
             wikilink_at(text, cursor_after(text, "[[#Heading")),
             Some(Wikilink::SameNote {
                 heading: Some("Heading".to_string()),
+                block: None,
             })
         );
+        let plain = "See [[Note]]";
+        let opening = plain.find("[[").expect("link");
+        assert_eq!(
+            wikilink_at(plain, opening),
+            Some(Wikilink::Note {
+                file: "Note".to_string(),
+                heading: None,
+                block: None,
+            })
+        );
+        assert_eq!(wikilink_at(plain, opening - 1), None);
         assert_eq!(wikilink_at(text, cursor_after(text, "`[[Hidden")), None);
         assert_eq!(wikilink_at(text, cursor_after(text, "[[Fenced")), None);
     }
@@ -775,6 +838,7 @@ mod tests {
             ResolvedLink {
                 path: "Notes/Target.md".to_string(),
                 heading: None,
+                block: None,
             }
         );
         let short = resolve_editor_link(
@@ -789,6 +853,7 @@ mod tests {
             ResolvedLink {
                 path: "Short.md".to_string(),
                 heading: None,
+                block: None,
             }
         );
         let missing = resolve_editor_link(&vault, "Notes/Current.md", "Go [[Missing]]", 4);
@@ -866,6 +931,7 @@ mod tests {
             Ok(ResolvedLink {
                 path: "Alpha/Exact.md".to_string(),
                 heading: None,
+                block: None,
             })
         );
     }
@@ -881,6 +947,7 @@ mod tests {
             Ok(ResolvedLink {
                 path: "Заметка.md".to_string(),
                 heading: None,
+                block: None,
             })
         );
     }
@@ -897,6 +964,7 @@ mod tests {
             Ok(ResolvedLink {
                 path: "Note.md".to_string(),
                 heading: Some("Head".to_string()),
+                block: None,
             })
         );
         let other = "[[Note#Head^block]]";
@@ -910,6 +978,7 @@ mod tests {
             Ok(ResolvedLink {
                 path: "Note.md".to_string(),
                 heading: Some("Head".to_string()),
+                block: Some("block".to_string()),
             })
         );
         let plain = "[[Note]]";
@@ -918,6 +987,7 @@ mod tests {
             Ok(ResolvedLink {
                 path: "Note.md".to_string(),
                 heading: None,
+                block: None,
             })
         );
         assert_eq!(
@@ -925,6 +995,34 @@ mod tests {
             Err(LinkError::SameNote)
         );
         assert_eq!(fs::read_dir(&temp.path).expect("read").count(), before);
+    }
+
+    #[test]
+    fn block_id_is_kept_and_found_outside_code() {
+        let temp = TempVault::new();
+        fs::write(temp.path.join("Заметка.md"), "текст ^идея\n").expect("note");
+        let vault = Vault::open(&temp.path).expect("open");
+        let linked = "[[Заметка#^идея]]";
+        assert_eq!(
+            resolve_editor_link(&vault, "Other.md", linked, cursor_after(linked, "[[Заметка")),
+            Ok(ResolvedLink {
+                path: "Заметка.md".to_string(),
+                heading: None,
+                block: Some("идея".to_string()),
+            })
+        );
+        let same = "[[#^идея]]";
+        assert_eq!(
+            resolve_editor_link(&vault, "Заметка.md", same, cursor_after(same, "[[#^")),
+            Ok(ResolvedLink {
+                path: "Заметка.md".to_string(),
+                heading: None,
+                block: Some("идея".to_string()),
+            })
+        );
+        let note = "текст ^идея\n```\nскрыто ^идея\n```\n";
+        assert_eq!(block_offset(note, "идея"), Some(utf16_len("текст ")));
+        assert_eq!(block_offset("```\nскрыто ^идея\n```\n", "идея"), None);
     }
 
     #[test]

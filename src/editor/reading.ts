@@ -1,7 +1,7 @@
 import { parser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
 import { embedLabel } from "./embed.ts";
-import { calloutLine, taskOnLine, visibleWikilinkLabel } from "./livePreview.ts";
+import { blockIdOnLine, calloutLine, taskOnLine, visibleWikilinkLabel } from "./livePreview.ts";
 
 export type Inline =
   | { kind: "text"; text: string }
@@ -10,11 +10,12 @@ export type Inline =
   | { kind: "emphasis"; text: string }
   | { kind: "link"; label: string; url: string }
   | { kind: "wikilink"; label: string; at: number }
-  | { kind: "embed"; body: string; label: string };
+  | { kind: "embed"; body: string; label: string }
+  | { kind: "blockId"; id: string };
 
 export type ReadingBlock =
   | { kind: "frontmatter"; text: string }
-  | { kind: "heading"; level: number; text: string }
+  | { kind: "heading"; level: number; text: string; blockId?: string }
   | { kind: "paragraph"; inlines: Inline[] }
   | { kind: "code"; text: string }
   | { kind: "list"; items: ReadingItem[] }
@@ -71,7 +72,14 @@ export function readDocument(text: string): ReadingBlock[] {
 
 function readBlock(text: string, node: SyntaxNode): ReadingBlock | null {
   if (/^ATXHeading[1-6]$/.test(node.name) || /^SetextHeading[12]$/.test(node.name)) {
-    return { kind: "heading", level: Number(node.name.slice(-1)), text: headingText(text, node) };
+    const heading = headingText(text, node);
+    const blockId = blockIdOnLine(heading);
+    return {
+      kind: "heading",
+      level: Number(node.name.slice(-1)),
+      text: blockId ? heading.slice(0, blockId.from).replace(/[ \t]+$/u, "") : heading,
+      blockId: blockId?.id,
+    };
   }
   if (node.name === "FencedCode" || node.name === "CodeBlock") {
     return { kind: "code", text: codeText(text, node) };
@@ -208,7 +216,21 @@ function inlinesOf(text: string, node: SyntaxNode, start = node.from): Inline[] 
   if (cursor < node.to) {
     inlines.push(...splitEmbeds(text.slice(cursor, node.to), cursor));
   }
-  return inlines.filter((inline) => inline.kind !== "text" || inline.text.length > 0);
+  return attachBlockId(inlines.filter((inline) => inline.kind !== "text" || inline.text.length > 0));
+}
+
+function attachBlockId(inlines: Inline[]): Inline[] {
+  const last = inlines[inlines.length - 1];
+  if (!last || last.kind !== "text") {
+    return inlines;
+  }
+  const found = blockIdOnLine(last.text);
+  if (!found) {
+    return inlines;
+  }
+  const text = last.text.slice(0, found.from).replace(/[ \t]+$/u, "");
+  const head = text ? [...inlines.slice(0, -1), { kind: "text" as const, text }] : inlines.slice(0, -1);
+  return [...head, { kind: "blockId", id: found.id }];
 }
 
 function splitEmbeds(source: string, from: number): Inline[] {

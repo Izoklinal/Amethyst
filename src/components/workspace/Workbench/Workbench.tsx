@@ -8,6 +8,7 @@ import {
   openVault,
   pickVaultDirectory,
   readStoredVaultPath,
+  noteBlockOffset,
   noteOutline,
   listVaultNotes,
   readVaultImage,
@@ -47,7 +48,7 @@ import {
 } from "../../../workspace/layoutState";
 import type { NoteEditorHandle } from "../../../editor/NoteEditor";
 import { embedLabel, headingSection } from "../../../editor/embed";
-import type { EmbedPaint } from "../../../editor/livePreview";
+import { markdownLinkAt, type EmbedPaint } from "../../../editor/livePreview";
 import { noteLinkPath } from "../../../editor/noteLink";
 import { ContextMenu, type ContextMenuItem } from "../../ui/ContextMenu/ContextMenu";
 import { ActivityBar } from "../ActivityBar/ActivityBar";
@@ -84,11 +85,16 @@ export function Workbench() {
   const vaultRequest = useRef(0);
   const treeHandle = useRef<ExplorerTreeHandle | null>(null);
   const [readingTabs, setReadingTabs] = useState<ReadonlySet<string>>(() => new Set());
+  const [sourceTabs, setSourceTabs] = useState<ReadonlySet<string>>(() => new Set());
   const readingFocusRef = useRef(false);
   const commandArgument = useRef<string | null>(null);
   const noteEditorRef = useRef<NoteEditorHandle>(null);
   const activeNoteRef = useRef<{ path: string; text: string } | null>(null);
-  const pendingHeading = useRef<{ path: string; heading: string } | null>(null);
+  const pendingHeading = useRef<{
+    path: string;
+    heading: string | null;
+    block: string | null;
+  } | null>(null);
   const chordRef = useRef<{ keys: Shortcut[]; at: number } | null>(null);
   layoutRef.current = layout;
 
@@ -246,9 +252,14 @@ export function Workbench() {
   }, []);
 
   const noteClosed = useRef<(path: string) => void>(() => undefined);
-  const notes = useOpenNotes(vault?.path ?? null, refreshToken, (path) => {
-    noteClosed.current(path);
-  });
+  const notes = useOpenNotes(
+    vault?.path ?? null,
+    refreshToken,
+    (path) => {
+      noteClosed.current(path);
+    },
+    () => focusEditor(),
+  );
   const explorer = useExplorerActions(vault?.path ?? null, refreshExplorer);
   readingFocusRef.current = notes.group.activeTabId
     ? readingTabs.has(notes.group.activeTabId)
@@ -314,6 +325,27 @@ export function Workbench() {
     }));
     action();
   }, []);
+
+  function openAddress(url: string) {
+    if (!url) {
+      return;
+    }
+    if (/^(https?:|mailto:)/i.test(url)) {
+      void openUrl(url).catch((error: unknown) => {
+        setLinkStatus(vaultErrorMessage(error));
+      });
+      return;
+    }
+    const source = activeNoteRef.current?.path;
+    const path = source ? noteLinkPath(source, url) : null;
+    if (!path) {
+      setLinkStatus("This link can't be opened.");
+      return;
+    }
+    const name = path.split("/").pop() ?? path;
+    notes.openMarkdown({ path, name, kind: "file" });
+    setLinkStatus(null);
+  }
 
   const commands = useMemo(
     () =>
@@ -409,6 +441,38 @@ export function Workbench() {
             }
             return next;
           });
+          setSourceTabs((current) => {
+            if (!current.has(tabId)) {
+              return current;
+            }
+            const next = new Set(current);
+            next.delete(tabId);
+            return next;
+          });
+          focusEditor();
+        },
+        toggleSource: () => {
+          const tabId = notes.group.activeTabId;
+          if (!tabId) {
+            return;
+          }
+          setSourceTabs((current) => {
+            const next = new Set(current);
+            if (next.has(tabId)) {
+              next.delete(tabId);
+            } else {
+              next.add(tabId);
+            }
+            return next;
+          });
+          setReadingTabs((current) => {
+            if (!current.has(tabId)) {
+              return current;
+            }
+            const next = new Set(current);
+            next.delete(tabId);
+            return next;
+          });
           focusEditor();
         },
         toggleCallout: () => {
@@ -423,11 +487,11 @@ export function Workbench() {
           }
           const next = text[at + 1];
           if (next === "-") {
-            editor.replace(at + 1, at + 2, "+");
+            editor.edit(at + 1, at + 2, "+");
           } else if (next === "+") {
-            editor.replace(at + 1, at + 2, "-");
+            editor.edit(at + 1, at + 2, "-");
           } else {
-            editor.replace(at + 1, at + 1, "-");
+            editor.edit(at + 1, at + 1, "-");
           }
         },
         openEmbed: () => {
@@ -440,7 +504,11 @@ export function Workbench() {
             .then(async (resolved) => {
               if (resolved.kind === "note") {
                 if (resolved.heading) {
-                  pendingHeading.current = { path: resolved.path, heading: resolved.heading };
+                  pendingHeading.current = {
+                    path: resolved.path,
+                    heading: resolved.heading,
+                    block: null,
+                  };
                   setHeadingRequest((current) => current + 1);
                 } else {
                   pendingHeading.current = null;
@@ -461,25 +529,7 @@ export function Workbench() {
             });
         },
         openLink: () => {
-          const url = commandArgument.current?.trim() ?? "";
-          if (!url) {
-            return;
-          }
-          if (/^(https?:|mailto:)/i.test(url)) {
-            void openUrl(url).catch((error: unknown) => {
-              setLinkStatus(vaultErrorMessage(error));
-            });
-            return;
-          }
-          const source = activeNoteRef.current?.path;
-          const path = source ? noteLinkPath(source, url) : null;
-          if (!path) {
-            setLinkStatus("This link can't be opened.");
-            return;
-          }
-          const name = path.split("/").pop() ?? path;
-          notes.openMarkdown({ path, name, kind: "file" });
-          setLinkStatus(null);
+          openAddress(commandArgument.current?.trim() ?? "");
         },
         followLink: () => {
           const current = activeNoteRef.current;
@@ -490,10 +540,15 @@ export function Workbench() {
           }
           const source = current.path;
           const text = current.text;
-          void resolveVaultWikilink(source, text, editor.selection().head)
+          const head = editor.selection().head;
+          void resolveVaultWikilink(source, text, head)
             .then((resolved) => {
-              if (resolved.heading) {
-                pendingHeading.current = { path: resolved.path, heading: resolved.heading };
+              if (resolved.heading || resolved.block) {
+                pendingHeading.current = {
+                  path: resolved.path,
+                  heading: resolved.heading,
+                  block: resolved.block,
+                };
                 setHeadingRequest((current) => current + 1);
               } else {
                 pendingHeading.current = null;
@@ -505,7 +560,15 @@ export function Workbench() {
               setLinkStatus(null);
             })
             .catch((error: unknown) => {
-              setLinkStatus(vaultErrorMessage(error));
+              const message = vaultErrorMessage(error);
+              if (message === "No link at the cursor.") {
+                const found = markdownLinkAt(text, head);
+                if (found) {
+                  openAddress(found.url);
+                  return;
+                }
+              }
+              setLinkStatus(message);
             });
         },
         revealHeading: () => {
@@ -652,7 +715,23 @@ export function Workbench() {
       return;
     }
     const heading = pending.heading;
+    const block = pending.block;
     pendingHeading.current = null;
+    if (block) {
+      void noteBlockOffset(buffer.text, block).then((offset) => {
+        if (offset == null) {
+          setLinkStatus("No block matches that link.");
+          return;
+        }
+        commandArgument.current = String(offset);
+        commands.find((command) => command.id === "note.revealHeading")?.run();
+        commandArgument.current = null;
+      });
+      return;
+    }
+    if (!heading) {
+      return;
+    }
     void noteOutline(buffer.text).then((items) => {
       const found = items.find((item) => item.text === heading);
       if (!found) {
@@ -847,6 +926,7 @@ export function Workbench() {
               }}
               loadEmbed={loadEmbed}
               reading={notes.group.activeTabId ? readingTabs.has(notes.group.activeTabId) : false}
+              source={notes.group.activeTabId ? sourceTabs.has(notes.group.activeTabId) : false}
               onFollowWikilink={(offset) => {
                 noteEditorRef.current?.select(offset);
                 commands.find((command) => command.id === "note.followLink")?.run();

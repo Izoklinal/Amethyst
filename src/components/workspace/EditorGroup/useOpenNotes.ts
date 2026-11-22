@@ -25,10 +25,13 @@ function isMarkdown(name: string): boolean {
   return name.toLowerCase().endsWith(".md");
 }
 
+const AUTOSAVE_DELAY_MS = 1000;
+
 export function useOpenNotes(
   vaultPath: string | null,
   refreshToken: number,
   onNoteClosed?: (path: string) => void,
+  onNoteOpened?: () => void,
 ) {
   const [group, setGroup] = useState<EditorGroup>(() => createInitialGroup());
   const [buffers, setBuffers] = useState<Record<string, NoteBuffer>>({});
@@ -37,6 +40,11 @@ export function useOpenNotes(
   const groupRef = useRef(group);
   const buffersRef = useRef(buffers);
   const onNoteClosedRef = useRef(onNoteClosed);
+  const onNoteOpenedRef = useRef(onNoteOpened);
+  const saveTimers = useRef<Record<string, number>>({});
+  const saveChains = useRef<Record<string, Promise<void>>>({});
+  const saveBlocked = useRef<Set<string>>(new Set());
+  onNoteOpenedRef.current = onNoteOpened;
   groupRef.current = group;
   buffersRef.current = buffers;
   onNoteClosedRef.current = onNoteClosed;
@@ -46,6 +54,11 @@ export function useOpenNotes(
     setBuffers({});
     setPendingCloseId(null);
     setOpenError(null);
+    saveBlocked.current.clear();
+    for (const timer of Object.values(saveTimers.current)) {
+      window.clearTimeout(timer);
+    }
+    saveTimers.current = {};
   }, [vaultPath]);
 
   useEffect(() => {
@@ -92,6 +105,7 @@ export function useOpenNotes(
       }
       setGroup((current) => activateTab(current, existing.id));
       setOpenError(null);
+      onNoteOpenedRef.current?.();
       return;
     }
     const id = crypto.randomUUID();
@@ -111,6 +125,7 @@ export function useOpenNotes(
             [id]: { path: entry.path, text, savedText: text, error: null },
           };
         });
+        onNoteOpenedRef.current?.();
       })
       .catch((cause: unknown) => {
         setOpenError(vaultErrorMessage(cause));
@@ -118,13 +133,22 @@ export function useOpenNotes(
   }, [vaultPath]);
 
   const edit = useCallback((tabId: string, text: string) => {
-    setBuffers((current) => {
-      const buffer = current[tabId];
-      if (!buffer) {
-        return current;
-      }
-      return { ...current, [tabId]: { ...buffer, text, error: null } };
-    });
+    const buffer = buffersRef.current[tabId];
+    if (!buffer) {
+      return;
+    }
+    const next = {
+      ...buffersRef.current,
+      [tabId]: { ...buffer, text, error: null },
+    };
+    buffersRef.current = next;
+    setBuffers(next);
+    saveBlocked.current.delete(tabId);
+    window.clearTimeout(saveTimers.current[tabId]);
+    saveTimers.current[tabId] = window.setTimeout(() => {
+      delete saveTimers.current[tabId];
+      void enqueueSave(tabId);
+    }, AUTOSAVE_DELAY_MS);
   }, []);
 
   const save = useCallback((tabId: string): Promise<boolean> => {
@@ -138,43 +162,84 @@ export function useOpenNotes(
     const written = buffer.text;
     return writeVaultNote(buffer.path, buffer.savedText, written)
       .then(() => {
+        const latest = buffersRef.current[tabId];
+        if (latest) {
+          buffersRef.current = {
+            ...buffersRef.current,
+            [tabId]: { ...latest, savedText: written, error: null },
+          };
+        }
         setBuffers((current) => {
-          const latest = current[tabId];
-          if (!latest) {
+          const latestBuffer = current[tabId];
+          if (!latestBuffer) {
             return current;
           }
           return {
             ...current,
-            [tabId]: { ...latest, savedText: written, error: null },
+            [tabId]: { ...latestBuffer, savedText: written, error: null },
           };
         });
         return true;
       })
       .catch((cause: unknown) => {
+        const message = vaultErrorMessage(cause);
+        const latest = buffersRef.current[tabId];
+        if (latest) {
+          buffersRef.current = {
+            ...buffersRef.current,
+            [tabId]: { ...latest, error: message },
+          };
+        }
         setBuffers((current) => {
-          const latest = current[tabId];
-          if (!latest) {
+          const latestBuffer = current[tabId];
+          if (!latestBuffer) {
             return current;
           }
           return {
             ...current,
-            [tabId]: { ...latest, error: vaultErrorMessage(cause) },
+            [tabId]: { ...latestBuffer, error: message },
           };
         });
         return false;
       });
   }, []);
 
+  const enqueueSave = useCallback((tabId: string): Promise<boolean> => {
+    const previous = saveChains.current[tabId] ?? Promise.resolve();
+    let saved = false;
+    const run = previous.catch(() => undefined).then(async () => {
+      if (saveBlocked.current.has(tabId)) {
+        return;
+      }
+      saved = true;
+      for (;;) {
+        const buffer = buffersRef.current[tabId];
+        if (!buffer || buffer.text === buffer.savedText) {
+          return;
+        }
+        const ok = await save(tabId);
+        if (!ok) {
+          saveBlocked.current.add(tabId);
+          saved = false;
+          return;
+        }
+      }
+    });
+    saveChains.current[tabId] = run.then(() => undefined);
+    return run.then(() => saved);
+  }, [save]);
+
   const closeNow = useCallback((tabId: string) => {
     const path =
       buffersRef.current[tabId]?.path ??
       groupRef.current.tabs.find((tab) => tab.id === tabId)?.path;
+    window.clearTimeout(saveTimers.current[tabId]);
+    delete saveTimers.current[tabId];
     setGroup((current) => closeTab(current, tabId));
-    setBuffers((current) => {
-      const next = { ...current };
-      delete next[tabId];
-      return next;
-    });
+    const nextBuffers = { ...buffersRef.current };
+    delete nextBuffers[tabId];
+    buffersRef.current = nextBuffers;
+    setBuffers(nextBuffers);
     setPendingCloseId((current) => (current === tabId ? null : current));
     if (path) {
       onNoteClosedRef.current?.(path);
@@ -183,15 +248,23 @@ export function useOpenNotes(
 
   const requestClose = useCallback(
     (tabId: string) => {
-      const buffer = buffersRef.current[tabId];
-      if (buffer && buffer.text !== buffer.savedText) {
-        setGroup((current) => activateTab(current, tabId));
-        setPendingCloseId(tabId);
-        return;
-      }
-      closeNow(tabId);
+      window.clearTimeout(saveTimers.current[tabId]);
+      delete saveTimers.current[tabId];
+      void enqueueSave(tabId).then((saved) => {
+        const buffer = buffersRef.current[tabId];
+        if (saved && (!buffer || buffer.text === buffer.savedText)) {
+          closeNow(tabId);
+          return;
+        }
+        if (buffer && buffer.text !== buffer.savedText) {
+          setGroup((current) => activateTab(current, tabId));
+          setPendingCloseId(tabId);
+          return;
+        }
+        closeNow(tabId);
+      });
     },
-    [closeNow],
+    [closeNow, enqueueSave],
   );
 
   const confirmSave = useCallback(() => {
@@ -199,12 +272,13 @@ export function useOpenNotes(
       return;
     }
     const tabId = pendingCloseId;
-    void save(tabId).then((saved) => {
+    saveBlocked.current.delete(tabId);
+    void enqueueSave(tabId).then((saved) => {
       if (saved) {
         closeNow(tabId);
       }
     });
-  }, [closeNow, pendingCloseId, save]);
+  }, [closeNow, enqueueSave, pendingCloseId]);
 
   const discard = useCallback(() => {
     if (pendingCloseId) {
@@ -218,10 +292,14 @@ export function useOpenNotes(
 
   const saveActive = useCallback(() => {
     const activeId = groupRef.current.activeTabId;
-    if (activeId) {
-      void save(activeId);
+    if (!activeId) {
+      return;
     }
-  }, [save]);
+    window.clearTimeout(saveTimers.current[activeId]);
+    delete saveTimers.current[activeId];
+    saveBlocked.current.delete(activeId);
+    void enqueueSave(activeId);
+  }, [enqueueSave]);
 
   const openNoteTexts = useMemo(
     () =>
@@ -238,8 +316,6 @@ export function useOpenNotes(
   let noteStatus = "No note";
   if (activeBuffer?.error) {
     noteStatus = activeBuffer.error;
-  } else if (activeBuffer && activeBuffer.text !== activeBuffer.savedText) {
-    noteStatus = "Unsaved";
   } else if (activeBuffer) {
     noteStatus = "Saved";
   } else if (openError) {
@@ -250,7 +326,7 @@ export function useOpenNotes(
     group.tabs
       .filter((tab) => {
         const buffer = buffers[tab.id];
-        return buffer !== undefined && buffer.text !== buffer.savedText;
+        return buffer?.error != null && buffer.text !== buffer.savedText;
       })
       .map((tab) => tab.id),
   );

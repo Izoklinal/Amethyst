@@ -70,7 +70,12 @@ export function trashVaultEntry(relativePath: string): Promise<void> {
 export type ResolvedLink = {
   path: string;
   heading: string | null;
+  block: string | null;
 };
+
+export function noteBlockOffset(text: string, block: string): Promise<number | null> {
+  return invoke<number | null>("note_block_offset", { text, block });
+}
 
 export function resolveVaultWikilink(
   source: string,

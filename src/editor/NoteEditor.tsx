@@ -1,10 +1,10 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { EmbedLoader } from "./livePreview";
-import { livePreview, setEmbedLoader } from "./livePreview";
+import { exitEmptyTask, livePreview, setEmbedLoader } from "./livePreview";
 
 export type NoteEditorHandle = {
   focus: () => void;
@@ -12,6 +12,7 @@ export type NoteEditorHandle = {
   selection: () => { from: number; to: number; head: number };
   select: (anchor: number, head?: number) => void;
   replace: (from: number, to: number, insert: string) => void;
+  edit: (from: number, to: number, insert: string) => void;
 };
 
 type NoteEditorProps = {
@@ -24,14 +25,18 @@ type NoteEditorProps = {
   onOpenEmbed: (body: string) => void;
   onToggleCallout: (offset: number) => void;
   loadEmbed: EmbedLoader;
+  source: boolean;
 };
+
+const previewCompartment = new Compartment();
 
 const noteExtensions = [
   history(),
+  Prec.high(keymap.of([{ key: "Enter", run: exitEmptyTask }])),
   keymap.of([...defaultKeymap, ...historyKeymap]),
   markdown(),
   EditorView.lineWrapping,
-  livePreview(),
+  previewCompartment.of(livePreview()),
   EditorView.contentAttributes.of({
     spellcheck: "false",
     "aria-label": "Note text",
@@ -49,6 +54,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
     onOpenEmbed,
     onToggleCallout,
     loadEmbed,
+    source,
   },
   ref,
 ) {
@@ -63,6 +69,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
   const loadEmbedRef = useRef(loadEmbed);
   const syncing = useRef(false);
   const initialText = useRef(text);
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
   onChangeRef.current = onChange;
   onFollowRef.current = onFollowLink;
   onToggleTaskRef.current = onToggleTask;
@@ -82,7 +90,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
       state: EditorState.create({
         doc: initialText.current,
         extensions: [
-          ...noteExtensions,
+          ...noteExtensions.slice(0, 5),
+          previewCompartment.of(sourceRef.current ? [] : livePreview()),
+          ...noteExtensions.slice(6),
           EditorView.domEventHandlers({
             mousedown(event, view) {
               const target = event.target;
@@ -129,6 +139,16 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
                 onToggleTaskRef.current(taskFrom);
                 return true;
               }
+              const blockId = target.closest(".cm-block-id");
+              if (blockId instanceof HTMLElement && view.dom.contains(blockId)) {
+                const at = Number(blockId.dataset.blockFrom);
+                if (!Number.isInteger(at)) {
+                  return false;
+                }
+                event.preventDefault();
+                view.dispatch({ selection: { anchor: at } });
+                return true;
+              }
               const link = target.closest(".cm-wikilink");
               if (!(link instanceof HTMLElement) || !view.dom.contains(link)) {
                 return false;
@@ -158,6 +178,16 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
       viewRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+    view.dispatch({
+      effects: previewCompartment.reconfigure(source ? [] : livePreview()),
+    });
+  }, [source]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -203,6 +233,13 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           changes: { from, to, insert },
           selection: { anchor: from + insert.length },
         });
+      },
+      edit(from: number, to: number, insert: string) {
+        const view = viewRef.current;
+        if (!view) {
+          return;
+        }
+        view.dispatch({ changes: { from, to, insert } });
       },
     }),
     [],
